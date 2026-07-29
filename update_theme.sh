@@ -1,0 +1,6 @@
+#!/bin/bash
+FILE="app/src/main/java/com/example/ui/theme/Theme.kt"
+
+# We will replace the entire LightColorScheme block
+perl -i -0777 -pe 's/private val LightColorScheme = lightColorScheme\([^)]+\)/private val LightColorScheme = lightColorScheme(\n    primary = Color(0xFF006C53),\n    onPrimary = Color.White,\n    primaryContainer = Color(0xFF85F8D2),\n    onPrimaryContainer = Color(0xFF002117),\n    secondary = Color(0xFF4B635B),\n    onSecondary = Color.White,\n    secondaryContainer = Color(0xFFCDE8DE),\n    onSecondaryContainer = Color(0xFF072019),\n    tertiary = Color(0xFFAD7000),\n    onTertiary = Color.White,\n    tertiaryContainer = Color(0xFFFFE0B6),\n    onTertiaryContainer = Color(0xFF382200),\n    background = Color(0xFFFBFDF9),\n    onBackground = Color(0xFF191C1B),\n    surface = Color(0xFFFBFDF9),\n    onSurface = Color(0xFF191C1B),\n    surfaceVariant = Color(0xFFDBE5E0),\n    onSurfaceVariant = Color(0xFF3F4945),\n    error = Color(0xFFBA1A1A),\n    onError = Color.White,\n    errorContainer = Color(0xFFFFDAD6),\n    onErrorContainer = Color(0xFF410002),\n    outline = Color(0xFF6F7975),\n    outlineVariant = Color(0xFFBEC9C4),\n    scrim = Color(0xFF000000)\n)/g' "$FILE"
+
