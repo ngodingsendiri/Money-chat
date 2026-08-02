@@ -58,8 +58,8 @@ fun PinConnectScreen(
         // Fallback simulation if real OAuth fails due to missing setup
         coroutineScope.launch {
             kotlinx.coroutines.delay(1000)
-            userEmail = "sipencil@gmail.com"
-            myName = "Pengguna Google"
+            userEmail = "user_${Random.nextInt(1000, 9999)}@offline.com"
+            myName = "Pengguna"
             isLoggedIn = true
             isAuthenticating = false
         }
@@ -163,19 +163,30 @@ fun PinConnectScreen(
                         Spacer(modifier = Modifier.width(12.dp))
                         Text("Menghubungkan...", fontWeight = FontWeight.Bold)
                     } else {
-                        // Normally we would use a Google icon here
                         Text("Login dengan Google", fontWeight = FontWeight.Bold)
                     }
                 }
             } else {
+                OutlinedTextField(
+                    value = myName,
+                    onValueChange = { myName = it },
+                    label = { Text("Nama Anda (Cth: Suami / Istri)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = IndigoPrimary,
+                        cursorColor = IndigoPrimary
+                    )
+                )
+                Spacer(modifier = Modifier.height(24.dp))
                 Text(
-                    text = "Selamat datang, $myName!\n\nHubungkan akun Anda dengan menggunakan PIN unik untuk mulai mencatat keuangan bersama.",
+                    text = "Hubungkan akun Anda dengan menggunakan PIN unik untuk mulai mencatat keuangan bersama.",
                     fontSize = 15.sp,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 12.dp, bottom = 32.dp)
+                    modifier = Modifier.padding(bottom = 32.dp)
                 )
-
                 if (generatedPin != null) {
                     Card(
                         modifier = Modifier.fillMaxWidth(),

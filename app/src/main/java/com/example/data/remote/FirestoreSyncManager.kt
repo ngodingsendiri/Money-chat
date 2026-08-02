@@ -19,9 +19,9 @@ object FirestoreSyncManager {
 
     val userEmail: String?
         get() = try {
-            FirebaseAuth.getInstance().currentUser?.email ?: "sipencil@gmail.com"
+            FirebaseAuth.getInstance().currentUser?.email ?: "anonymous@offline.com"
         } catch (e: Exception) {
-            "sipencil@gmail.com"
+            "anonymous@offline.com"
         }
 
     fun isUserSignedIn(): Boolean {

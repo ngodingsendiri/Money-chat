@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.HomeWork
 import androidx.compose.material.icons.rounded.MedicalServices
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Payments
-import androidx.compose.material.icons.rounded.ReceiptLong
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.SportsEsports
@@ -443,7 +442,7 @@ fun BalanceBannerCard(
     balance: Double
 ) {
     val currencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
             maximumFractionDigits = 0
         }
     }
@@ -588,7 +587,7 @@ fun CategoryProgressRow(
     accentColor: Color
 ) {
     val currencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
             maximumFractionDigits = 0
         }
     }
@@ -674,12 +673,12 @@ fun TransactionItemCard(
 ) {
     val isIncome = transaction.type == "PEMASUKAN"
     val currencyFormat = remember {
-        NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+        NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
             maximumFractionDigits = 0
         }
     }
 
-    val dateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale("id", "ID")) }
+    val dateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.forLanguageTag("id-ID")) }
 
     val amountColor = if (isIncome) IncomeGreen else ExpenseRed
     val amountPrefix = if (isIncome) "+ " else "- "

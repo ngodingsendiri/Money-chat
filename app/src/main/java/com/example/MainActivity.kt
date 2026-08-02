@@ -19,7 +19,6 @@ import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,6 +82,7 @@ class MainActivity : ComponentActivity() {
                 val totalExpense by viewModel.totalExpense.collectAsStateWithLifecycle()
                 val auditReport by viewModel.auditReport.collectAsStateWithLifecycle()
                 val isAuditLoading by viewModel.isAuditLoading.collectAsStateWithLifecycle()
+                val quickSuggestions by viewModel.quickSuggestions.collectAsStateWithLifecycle()
 
                 var selectedTab by remember { mutableIntStateOf(0) }
                 var showAddDialog by remember { mutableStateOf(false) }
@@ -232,6 +232,7 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 when (selectedTab) {
                                     0 -> ChatScreen(
+                                        quickSuggestions = quickSuggestions,
                                         messages = messages,
                                         activeSender = activeSender,
                                         isAiThinking = isAiThinking,

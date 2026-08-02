@@ -8,6 +8,8 @@ import com.example.data.local.remote.GeminiService
 import com.example.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class FinanceRepository(
     private val chatMessageDao: ChatMessageDao,
@@ -18,6 +20,7 @@ class FinanceRepository(
     val allTransactions: Flow<List<FinancialTransaction>> = transactionDao.getAllTransactions()
 
     suspend fun sendMessage(sender: String, messageText: String) {
+        withContext(Dispatchers.IO) {
         // 1. Insert user chat message
         val initialMsg = ChatMessage(
             sender = sender,
@@ -63,8 +66,10 @@ class FinanceRepository(
 
         // NO AUTOMATIC AI CHAT BUBBLE HERE! Chat stays clean between Husband & Wife.
     }
+        }
 
     suspend fun askAiInChat(prompt: String): String {
+        return withContext(Dispatchers.IO) {
         // Only created when user explicitly requests AI input/advice
         val recentList = chatMessageDao.getAllMessages().first().takeLast(10)
         val aiResult = GeminiService.parseChatMessage(prompt, "PASUTRI", recentList)
@@ -77,22 +82,34 @@ class FinanceRepository(
         val msgId = chatMessageDao.insertMessage(aiMsg)
         FirestoreSyncManager.syncChatMessage(aiMsg.copy(id = msgId))
 
-        return aiResult.aiReply
+        aiResult.aiReply
+        }
     }
 
     suspend fun addManualTransaction(transaction: FinancialTransaction) {
+        withContext(Dispatchers.IO) {
         val id = transactionDao.insertTransaction(transaction)
         FirestoreSyncManager.syncTransaction(transaction.copy(id = id))
+        }
     }
 
     suspend fun deleteTransaction(transaction: FinancialTransaction) {
+        withContext(Dispatchers.IO) {
         transactionDao.deleteTransaction(transaction)
         FirestoreSyncManager.deleteTransactionFromCloud(transaction.id)
+        }
     }
 
     suspend fun clearAllData() {
+        withContext(Dispatchers.IO) {
         chatMessageDao.deleteAllMessages()
         transactionDao.deleteAllTransactions()
+        }
+    }
+
+
+    suspend fun getFrequentTransactionSuggestions(transactions: List<FinancialTransaction>): List<String> {
+        return GeminiService.generateFrequentTransactionSuggestions(transactions)
     }
 
     suspend fun generateAuditReport(

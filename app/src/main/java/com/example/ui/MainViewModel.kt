@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
+@kotlinx.coroutines.FlowPreview
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: FinanceRepository
@@ -38,6 +41,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val totalIncome: StateFlow<Double>
     val totalExpense: StateFlow<Double>
 
+    private val _quickSuggestions = MutableStateFlow<List<String>>(emptyList())
+    val quickSuggestions: StateFlow<List<String>> = _quickSuggestions.asStateFlow()
+
     init {
         val db = AppDatabase.getDatabase(application)
         repository = FinanceRepository(db.chatMessageDao(), db.transactionDao())
@@ -58,9 +64,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             list.filter { it.type == "PEMASUKAN" }.sumOf { it.amount }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
 
+
         totalExpense = transactions.map { list ->
             list.filter { it.type == "PENGELUARAN" }.sumOf { it.amount }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+        viewModelScope.launch {
+            transactions
+                .debounce(3000)
+                .collect { list ->
+                    if (list.isNotEmpty()) {
+                        try {
+                            _quickSuggestions.value = repository.getFrequentTransactionSuggestions(list)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    } else {
+                        _quickSuggestions.value = listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
+                    }
+                }
+        }
+
     }
 
     fun setSender(sender: String) {
@@ -78,6 +102,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isAiThinking.value = true
             try {
                 repository.sendMessage(currentSender, text.trim())
+            } catch (e: Exception) {
+                e.printStackTrace()
             } finally {
                 _isAiThinking.value = false
             }
@@ -90,6 +116,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _isAiThinking.value = true
             try {
                 repository.askAiInChat(prompt.trim())
+            } catch (e: Exception) {
+                e.printStackTrace()
             } finally {
                 _isAiThinking.value = false
             }
@@ -111,13 +139,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 description = description,
                 loggedBy = loggedBy
             )
-            repository.addManualTransaction(trans)
+            
+                try {
+                    repository.addManualTransaction(trans)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
         }
     }
 
     fun deleteTransaction(transaction: FinancialTransaction) {
         viewModelScope.launch {
-            repository.deleteTransaction(transaction)
+            
+            try {
+                repository.deleteTransaction(transaction)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -130,6 +168,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val exp = totalExpense.value
                 val report = repository.generateAuditReport(currentTrans, inc, exp)
                 _auditReport.value = report
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _auditReport.value = "Gagal memuat laporan, silakan coba lagi."
             } finally {
                 _isAuditLoading.value = false
             }
@@ -142,7 +183,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAllData() {
         viewModelScope.launch {
-            repository.clearAllData()
+            
+            try {
+                repository.clearAllData()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -85,10 +86,12 @@ fun ChatScreen(
     messages: List<ChatMessage>,
     activeSender: String,
     isAiThinking: Boolean,
+    quickSuggestions: List<String>,
     onSenderChanged: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     onAskAiClicked: (String) -> Unit
 ) {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -103,6 +106,7 @@ fun ChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .imePadding()
     ) {
         // Chat Message List
         LazyColumn(
@@ -110,7 +114,7 @@ fun ChatScreen(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (messages.isEmpty() && !isAiThinking) {
@@ -155,9 +159,12 @@ fun ChatScreen(
         }
 
         // Quick Suggestion Chips (placed above input field)
-        QuickSuggestionRow(
-            onSuggestionClicked = { inputText = it }
-        )
+        AnimatedVisibility(visible = inputText.isBlank() && quickSuggestions.isNotEmpty()) {
+            QuickSuggestionRow(
+                suggestions = quickSuggestions,
+                onSuggestionClicked = { inputText = it }
+            )
+        }
 
         // Chat Input Box
         Surface(
@@ -191,6 +198,7 @@ fun ChatScreen(
                     minLines = 1,
                     trailingIcon = {
                         IconButton(
+                            enabled = inputText.isNotBlank(),
                             onClick = {
                                 if (inputText.isNotBlank()) {
                                     onAskAiClicked(inputText)
@@ -202,7 +210,7 @@ fun ChatScreen(
                             Icon(
                                 imageVector = Icons.Rounded.AutoAwesome,
                                 contentDescription = "Tanya AI",
-                                tint = AiPurple
+                                tint = if (inputText.isNotBlank()) if (isDark) Color(0xFFD0BCFF) else AiPurple else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
@@ -215,6 +223,7 @@ fun ChatScreen(
                     modifier = Modifier.padding(bottom = 2.dp)
                 ) {
                     IconButton(
+                        enabled = inputText.isNotBlank(),
                         onClick = {
                             if (inputText.isNotBlank()) {
                                 onSendMessage(inputText)
@@ -224,13 +233,13 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(IndigoPrimary)
+                            .background(if (inputText.isNotBlank()) if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant)
                             .testTag("send_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.Send,
                             contentDescription = "Kirim",
-                            tint = Color.White,
+                            tint = if (inputText.isNotBlank()) if (isDark) MaterialTheme.colorScheme.onPrimary else Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -244,6 +253,7 @@ fun ChatScreen(
 fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifier: Modifier = Modifier) {
     val isAi = message.sender == "AI"
     val isMe = message.sender == currentActiveSender
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
 
     val alignment = when {
         isAi -> Alignment.Start
@@ -252,18 +262,18 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
     }
 
     val bubbleColor = when {
-        isAi -> AiPurpleLight
-        isMe -> IndigoPrimary
+        isAi -> if (isDark) Color(0xFF331650) else AiPurpleLight
+        isMe -> if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     
     val textColor = when {
-        isMe -> Color.White
+        isMe -> if (isDark) MaterialTheme.colorScheme.onPrimary else Color.White
         else -> MaterialTheme.colorScheme.onSurface
     }
     
     val timeColor = when {
-        isMe -> Color.White.copy(alpha = 0.7f)
+        isMe -> if (isDark) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f)
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     }
 
@@ -276,12 +286,12 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
     }
 
     val senderColor = when {
-        isMe -> IndigoPrimary
-        isAi -> AiPurple
+        isMe -> if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary
+        isAi -> if (isDark) Color(0xFFD0BCFF) else AiPurple
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale("id", "ID")) }
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.forLanguageTag("id-ID")) }
     val formattedTime = timeFormat.format(Date(message.timestamp))
 
     Column(
@@ -343,10 +353,10 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
                 if (message.isFinancial && message.detectedAmount != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val isIncome = message.detectedType == "PEMASUKAN"
-                    val tagBg = if (isIncome) IncomeGreenLight else ExpenseRedLight
-                    val tagColor = if (isIncome) IncomeGreen else ExpenseRed
+                    val tagBg = if (isIncome) if (isDark) Color(0xFF0F5223) else IncomeGreenLight else if (isDark) Color(0xFF8C1D18) else ExpenseRedLight
+                    val tagColor = if (isIncome) if (isDark) Color(0xFFC4EED0) else IncomeGreen else if (isDark) Color(0xFFF9DEDC) else ExpenseRed
 
-                    val formatRp = NumberFormat.getCurrencyInstance(Locale("id", "ID")).apply {
+                    val formatRp = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
                         maximumFractionDigits = 0
                     }.format(message.detectedAmount)
 
@@ -381,6 +391,7 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
 
 @Composable
 fun AiThinkingBubble() {
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -389,8 +400,8 @@ fun AiThinkingBubble() {
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = AiPurpleLight,
-            border = androidx.compose.foundation.BorderStroke(1.dp, AiPurple.copy(alpha = 0.3f))
+            color = if (isDark) Color(0xFF331650) else AiPurpleLight,
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFFD0BCFF) else AiPurple.copy(alpha = 0.3f))
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -398,14 +409,14 @@ fun AiThinkingBubble() {
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
-                    color = AiPurple,
+                    color = if (isDark) Color(0xFFD0BCFF) else AiPurple,
                     strokeWidth = 2.dp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "AI sedang memproses...",
                     style = MaterialTheme.typography.labelMedium,
-                    color = AiPurple,
+                    color = if (isDark) Color(0xFFD0BCFF) else AiPurple,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -415,16 +426,9 @@ fun AiThinkingBubble() {
 
 @Composable
 fun QuickSuggestionRow(
+    suggestions: List<String>,
     onSuggestionClicked: (String) -> Unit
 ) {
-    val suggestions = listOf(
-        "Iuran kas 100.000",
-        "Beli ATK 250rb",
-        "Bayar tagihan listrik 350.000",
-        "Pemasukan kas 5.000.000",
-        "Konsumsi 85k"
-    )
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
