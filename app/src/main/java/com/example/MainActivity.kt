@@ -67,7 +67,6 @@ import com.example.ui.screens.AiReportDialog
 import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.RekapScreen
 import com.example.ui.theme.CoupleFinanceTheme
-import com.example.ui.theme.IndigoPrimary
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -98,6 +97,7 @@ class MainActivity : ComponentActivity() {
                 var showSettingsMenu by remember { mutableStateOf(false) }
                 var showGeminiKeyDialog by remember { mutableStateOf(false) }
                 var showOpenRouterKeyDialog by remember { mutableStateOf(false) }
+                var showConfirmClearDialog by remember { mutableStateOf(false) }
 
                 var workspacePin by remember { mutableStateOf(prefs.getString("workspace_pin", null)) }
                 var userName by remember { mutableStateOf(prefs.getString("user_name", null)) }
@@ -109,7 +109,7 @@ class MainActivity : ComponentActivity() {
                     userName?.let { viewModel.setSender(it) }
                 }
                 LaunchedEffect(geminiKey) {
-                    com.example.data.local.remote.GeminiService.userApiKey = geminiKey
+                    com.example.data.remote.GeminiService.userApiKey = geminiKey
                 }
                 LaunchedEffect(openRouterKey) {
                     com.example.data.remote.OpenRouterService.userApiKey = openRouterKey
@@ -205,8 +205,8 @@ class MainActivity : ComponentActivity() {
                                                 DropdownMenuItem(
                                                     text = { Text("Hapus Semua Data") },
                                                     onClick = { 
-                                                        viewModel.clearAllData()
                                                         showSettingsMenu = false
+                                                        showConfirmClearDialog = true
                                                     },
                                                     leadingIcon = {
                                                         Icon(
@@ -283,7 +283,6 @@ class MainActivity : ComponentActivity() {
                                         messages = messages,
                                         activeSender = activeSender,
                                         isAiThinking = isAiThinking,
-                                        onSenderChanged = { viewModel.setSender(it) },
                                         onSendMessage = { viewModel.sendMessage(it) },
                                         onAskAiClicked = { viewModel.askAiInChat(it) }
                                     )
@@ -334,6 +333,31 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putString("openrouter_api_key", newKey).apply()
                                         openRouterKey = newKey
                                         showOpenRouterKeyDialog = false
+                                    }
+                                )
+                            }
+
+                            if (showConfirmClearDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showConfirmClearDialog = false },
+                                    title = { Text("Hapus Semua Data?") },
+                                    text = {
+                                        Text("Semua pesan obrolan dan transaksi keuangan akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.")
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                viewModel.clearAllData()
+                                                showConfirmClearDialog = false
+                                            }
+                                        ) {
+                                            Text("Hapus", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showConfirmClearDialog = false }) {
+                                            Text("Batal")
+                                        }
                                     }
                                 )
                             }

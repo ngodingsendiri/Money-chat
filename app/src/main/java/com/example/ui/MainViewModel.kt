@@ -91,10 +91,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _activeSender.value = sender
     }
 
-    fun toggleSender() {
-        _activeSender.value = if (_activeSender.value == "ISTRI") "SUAMI" else "ISTRI"
-    }
-
     fun sendMessage(text: String) {
         if (text.isBlank()) return
         val currentSender = _activeSender.value

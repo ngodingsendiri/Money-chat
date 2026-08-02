@@ -17,11 +17,12 @@ android {
     applicationId = "com.aistudio.couplefinance.kxmpzq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "1.0.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + (System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "YOUR_CLIENT_ID_HERE") + "\"")
+    buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
   }
 
   signingConfigs {
@@ -64,21 +65,16 @@ android {
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
+  // OPENROUTER_API_KEY dikelola manual via buildConfigField (env) agar tidak duplikat
+  ignoreList.add("OPENROUTER_API_KEY")
 }
 
 googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
 
-// Some unused dependencies are commented out below instead of being removed.
-// This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
-  // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
-  // implementation(libs.androidx.camera.camera2)
-  // implementation(libs.androidx.camera.core)
-  // implementation(libs.androidx.camera.lifecycle)
-  // implementation(libs.androidx.camera.view)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(libs.androidx.compose.material3)
@@ -86,17 +82,13 @@ dependencies {
   implementation(libs.androidx.compose.ui.graphics)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
-  // implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
-  // implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  // implementation(libs.coil.compose)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
-  // Uncomment to use Firestore:
   implementation(libs.firebase.firestore)
 
   // Firebase Auth
@@ -110,7 +102,6 @@ dependencies {
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  // implementation(libs.play.services.location)
   implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)

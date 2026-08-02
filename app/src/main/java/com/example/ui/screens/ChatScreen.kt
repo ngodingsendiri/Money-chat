@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,16 +30,9 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Face
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Receipt
-import androidx.compose.material.icons.rounded.ShoppingCart
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,8 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -68,13 +60,8 @@ import com.example.ui.theme.AiPurple
 import com.example.ui.theme.AiPurpleLight
 import com.example.ui.theme.ExpenseRed
 import com.example.ui.theme.ExpenseRedLight
-import com.example.ui.theme.HusbandBlue
-import com.example.ui.theme.HusbandBlueLight
 import com.example.ui.theme.IncomeGreen
 import com.example.ui.theme.IncomeGreenLight
-import com.example.ui.theme.IndigoPrimary
-import com.example.ui.theme.WifePink
-import com.example.ui.theme.WifePinkLight
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -87,11 +74,10 @@ fun ChatScreen(
     activeSender: String,
     isAiThinking: Boolean,
     quickSuggestions: List<String>,
-    onSenderChanged: (String) -> Unit,
     onSendMessage: (String) -> Unit,
     onAskAiClicked: (String) -> Unit
 ) {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
@@ -233,13 +219,13 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (inputText.isNotBlank()) if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary else MaterialTheme.colorScheme.surfaceVariant)
+                            .background(if (inputText.isNotBlank()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
                             .testTag("send_button")
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.Send,
                             contentDescription = "Kirim",
-                            tint = if (inputText.isNotBlank()) if (isDark) MaterialTheme.colorScheme.onPrimary else Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (inputText.isNotBlank()) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -253,7 +239,7 @@ fun ChatScreen(
 fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifier: Modifier = Modifier) {
     val isAi = message.sender == "AI"
     val isMe = message.sender == currentActiveSender
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     val alignment = when {
         isAi -> Alignment.Start
@@ -263,17 +249,17 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
 
     val bubbleColor = when {
         isAi -> if (isDark) Color(0xFF331650) else AiPurpleLight
-        isMe -> if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary
+        isMe -> MaterialTheme.colorScheme.primary
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     
     val textColor = when {
-        isMe -> if (isDark) MaterialTheme.colorScheme.onPrimary else Color.White
+        isMe -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurface
     }
     
     val timeColor = when {
-        isMe -> if (isDark) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.7f)
+        isMe -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     }
 
@@ -286,7 +272,7 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
     }
 
     val senderColor = when {
-        isMe -> if (isDark) MaterialTheme.colorScheme.primary else IndigoPrimary
+        isMe -> MaterialTheme.colorScheme.primary
         isAi -> if (isDark) Color(0xFFD0BCFF) else AiPurple
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -391,7 +377,7 @@ fun ChatMessageBubble(message: ChatMessage, currentActiveSender: String, modifie
 
 @Composable
 fun AiThinkingBubble() {
-    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier

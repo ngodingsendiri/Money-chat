@@ -34,11 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import com.example.ui.theme.ExpenseRed
-import com.example.ui.theme.HusbandBlue
-import com.example.ui.theme.IncomeGreen
-import com.example.ui.theme.IndigoPrimary
-import com.example.ui.theme.WifePink
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -124,12 +120,18 @@ fun AddTransactionDialog(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Amount Input
+                val amountVal = amountText.toDoubleOrNull() ?: 0.0
+                val isAmountInvalid = amountText.isNotBlank() && amountVal <= 0
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
                     label = { Text("Nominal (Rp)") },
                     placeholder = { Text("Contoh: 150000") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError = isAmountInvalid,
+                    supportingText = if (isAmountInvalid) {
+                        { Text("Nominal harus lebih dari 0") }
+                    } else null,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("add_dialog_amount_field"),
@@ -224,12 +226,11 @@ fun AddTransactionDialog(
                     Button(
                         onClick = {
                             val amountVal = amountText.toDoubleOrNull() ?: 0.0
-                            if (amountVal > 0 && description.isNotBlank()) {
-                                onConfirm(type, selectedCategory, amountVal, description, loggedBy)
-                                onDismiss()
-                            }
+                            onConfirm(type, selectedCategory, amountVal, description, loggedBy)
+                            onDismiss()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary),
+                        enabled = description.isNotBlank() && amountText.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         modifier = Modifier.testTag("add_dialog_save_button")
                     ) {
                         Text("Simpan")

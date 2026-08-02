@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import com.example.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -24,6 +25,14 @@ object OpenRouterService {
     @Volatile
     var userApiKey: String? = null
 
+    /** Key bawaan aplikasi dari BuildConfig (diisi via env OPENROUTER_API_KEY saat build/CI). */
+    private fun appApiKey(): String = BuildConfig.OPENROUTER_API_KEY
+
+    /** Key aktif: key pengguna (BYOK) lebih diutamakan, fallback ke key bawaan app. */
+    fun activeApiKey(): String? =
+        userApiKey?.takeIf { it.isNotBlank() }
+            ?: appApiKey().takeIf { it.isNotBlank() && it != "YOUR_OPENROUTER_API_KEY" }
+
     private const val BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
     /** Daftar model gratis (divalidasi langsung dari https://openrouter.ai/api/v1/models).
@@ -46,7 +55,7 @@ object OpenRouterService {
 
     /** Kirim prompt ke model gratis OpenRouter dengan rotasi otomatis saat gagal. */
     suspend fun completeChat(prompt: String): String? = withContext(Dispatchers.IO) {
-        val key = userApiKey?.takeIf { it.isNotBlank() } ?: return@withContext null
+        val key = activeApiKey() ?: return@withContext null
 
         for (model in FREE_MODELS) {
             try {

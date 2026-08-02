@@ -1,9 +1,8 @@
-package com.example.data.local.remote
+package com.example.data.remote
 
 import com.example.BuildConfig
 import com.example.data.local.ChatMessage
 import com.example.data.local.FinancialTransaction
-import com.example.data.remote.OpenRouterService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -52,7 +51,7 @@ object GeminiService {
         val prompt = buildParsePrompt(messageText, sender)
 
         // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+        if (OpenRouterService.activeApiKey() != null) {
             try {
                 val text = OpenRouterService.completeChat(prompt)
                 if (text != null) {
@@ -113,7 +112,7 @@ object GeminiService {
         """.trimIndent()
 
         // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+        if (OpenRouterService.activeApiKey() != null) {
             try {
                 val text = OpenRouterService.completeChat(prompt)
                 if (!text.isNullOrBlank()) {
@@ -191,7 +190,7 @@ object GeminiService {
         """.trimIndent()
 
         // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+        if (OpenRouterService.activeApiKey() != null) {
             try {
                 val text = OpenRouterService.completeChat(prompt)
                 if (!text.isNullOrBlank()) {
@@ -239,21 +238,21 @@ object GeminiService {
             - Groceries & Sembako
             - Makanan & Minuman
             - Tagihan & Utilitas
-            - Kebutuhan Operasional
+            - Kebutuhan Anak
             - Transportasi
-            - Kesehatan & Keselamatan
-            - Hiburan & Acara
+            - Kesehatan & Skincare
+            - Hiburan & Belanja
             - Lain-lain
-            - Gaji & Pemasukan Kas
+            - Gaji & Pemasukan
             
             Keluarkan jawaban HANYA berupa JSON valid dalam format persis seperti ini:
             {
               "containsTransaction": true,
               "type": "PENGELUARAN" atau "PEMASUKAN",
-              "category": "Kebutuhan Operasional",
+              "category": "Makanan & Minuman",
               "amount": 50000,
-              "description": "Beli kertas dan alat tulis",
-              "aiReply": "Transaksi 'Beli kertas dan alat tulis' sebesar Rp 50.000 telah dicatat otomatis."
+              "description": "Beli nasi padang",
+              "aiReply": "Transaksi 'Beli nasi padang' sebesar Rp 50.000 telah dicatat otomatis."
             }
             
             Jika tidak mengandung transaksi keuangan, kirimkan:
@@ -376,7 +375,7 @@ object GeminiService {
                 textLower.contains("sewa") || textLower.contains("pulsa") ||
                 textLower.contains("listrik") || textLower.contains("air") ||
                 textLower.contains("popok") || textLower.contains("susu") ||
-                textLower.contains("makan") || textLower.contains("transksi") ||
+                textLower.contains("makan") || textLower.contains("transaksi") ||
                 amount > 0
         )
 

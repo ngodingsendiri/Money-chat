@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,8 +40,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -76,8 +71,6 @@ import com.example.ui.theme.ExpenseRedLight
 import com.example.ui.theme.HusbandBlue
 import com.example.ui.theme.IncomeGreen
 import com.example.ui.theme.IncomeGreenLight
-import com.example.ui.theme.IndigoPrimary
-import com.example.ui.theme.IndigoSecondary
 import com.example.ui.theme.WifePink
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -296,9 +289,9 @@ fun RekapScreen(
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                             modifier = Modifier.testTag("manual_add_button")
                         ) {
-                            Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = IndigoPrimary)
+                            Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Tambah", fontSize = 12.sp, color = IndigoPrimary, fontWeight = FontWeight.SemiBold)
+                            Text("Tambah", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
@@ -337,7 +330,7 @@ fun RekapScreen(
                                         text = label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) IndigoPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -386,29 +379,6 @@ fun RekapScreen(
                     }
                 }
             } else {
-                if (filteredTransactions.isEmpty()) {
-                    item {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ReceiptLong,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                "Tidak ada transaksi",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
                 items(filteredTransactions, key = { it.id }) { trans ->
                     TransactionItemCard(
                         transaction = trans,
@@ -422,7 +392,7 @@ fun RekapScreen(
         // Floating Action Button for Fast Entry
         FloatingActionButton(
             onClick = onAddTransactionClicked,
-            containerColor = IndigoPrimary,
+            containerColor = MaterialTheme.colorScheme.primary,
             contentColor = Color.White,
             shape = RoundedCornerShape(18.dp),
             modifier = Modifier
@@ -496,7 +466,7 @@ fun BalanceBannerCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Realtime",
+                        text = "Tersimpan Lokal",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Medium

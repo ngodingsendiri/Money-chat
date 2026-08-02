@@ -26,7 +26,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.example.BuildConfig
 import com.example.R
-import com.example.ui.theme.IndigoPrimary
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
@@ -52,7 +51,6 @@ fun PinConnectScreen(
     var myName by remember { mutableStateOf("") }
     var isJoining by remember { mutableStateOf(false) }
     var isAuthenticating by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     fun simulateGoogleLogin() {
         // Fallback simulation if real OAuth fails due to missing setup
@@ -67,7 +65,6 @@ fun PinConnectScreen(
 
     fun handleGoogleSignIn() {
         isAuthenticating = true
-        errorMessage = null
         
         coroutineScope.launch {
             try {
@@ -175,8 +172,8 @@ fun PinConnectScreen(
                     shape = RoundedCornerShape(16.dp),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = IndigoPrimary,
-                        cursorColor = IndigoPrimary
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary
                     )
                 )
                 Spacer(modifier = Modifier.height(24.dp))
@@ -191,7 +188,7 @@ fun PinConnectScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = IndigoPrimary.copy(alpha = 0.1f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                         elevation = CardDefaults.cardElevation(0.dp)
                     ) {
                         Column(
@@ -203,7 +200,7 @@ fun PinConnectScreen(
                                 text = generatedPin!!,
                                 style = MaterialTheme.typography.displayMedium,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = IndigoPrimary,
+                                color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 8.sp,
                                 modifier = Modifier.padding(vertical = 12.dp)
                             )
@@ -220,7 +217,7 @@ fun PinConnectScreen(
                                 onClick = { onPinConnected(generatedPin!!, myName.ifBlank { "Pengguna" }) },
                                 modifier = Modifier.fillMaxWidth().height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary)
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                             ) {
                                 Text("Masuk", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             }
@@ -235,8 +232,8 @@ fun PinConnectScreen(
                         shape = RoundedCornerShape(16.dp),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = IndigoPrimary,
-                            cursorColor = IndigoPrimary
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            cursorColor = MaterialTheme.colorScheme.primary
                         )
                     )
                     
@@ -251,7 +248,7 @@ fun PinConnectScreen(
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         enabled = inputPin.length == 6,
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("Gabung", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
@@ -269,7 +266,7 @@ fun PinConnectScreen(
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = IndigoPrimary)
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
                         Text("Buat PIN", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
@@ -281,7 +278,7 @@ fun PinConnectScreen(
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text("Gunakan PIN", fontSize = 16.sp, color = IndigoPrimary)
+                        Text("Gunakan PIN", fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }

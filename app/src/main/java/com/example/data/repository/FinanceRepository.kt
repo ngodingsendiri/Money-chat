@@ -4,7 +4,7 @@ import com.example.data.local.ChatMessage
 import com.example.data.local.ChatMessageDao
 import com.example.data.local.FinancialTransaction
 import com.example.data.local.TransactionDao
-import com.example.data.local.remote.GeminiService
+import com.example.data.remote.GeminiService
 import com.example.data.remote.FirestoreSyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
