@@ -1,5 +1,7 @@
 package com.ngodingsendiri.moneychat
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -45,6 +47,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -56,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +74,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.FileProvider
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ngodingsendiri.moneychat.R
@@ -78,7 +83,11 @@ import com.ngodingsendiri.moneychat.ui.screens.AddTransactionDialog
 import com.ngodingsendiri.moneychat.ui.screens.AiReportDialog
 import com.ngodingsendiri.moneychat.ui.screens.ChatScreen
 import com.ngodingsendiri.moneychat.ui.screens.RekapScreen
+import com.ngodingsendiri.moneychat.data.remote.GitHubRelease
+import com.ngodingsendiri.moneychat.data.remote.GitHubUpdateChecker
 import com.ngodingsendiri.moneychat.ui.theme.CoupleFinanceTheme
+import java.io.File
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -125,6 +134,10 @@ class MainActivity : ComponentActivity() {
                 var workspacePin by remember { mutableStateOf(prefs.getString("workspace_pin", null)) }
                 var userName by remember { mutableStateOf(prefs.getString("user_name", null)) }
                 var firebaseReady by remember { mutableStateOf(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) }
+                val scope = rememberCoroutineScope()
+                var updateInfo by remember { mutableStateOf<GitHubRelease?>(null) }
+                var isDownloadingUpdate by remember { mutableStateOf(false) }
+                var updateMessage by remember { mutableStateOf<String?>(null) }
                 var geminiKey by remember { mutableStateOf(prefs.getString("gemini_api_key", null)) }
                 var openRouterKey by remember { mutableStateOf(prefs.getString("openrouter_api_key", null)) }
 
@@ -141,6 +154,17 @@ class MainActivity : ComponentActivity() {
                 }
                 LaunchedEffect(openRouterKey) {
                     com.ngodingsendiri.moneychat.data.remote.OpenRouterService.userApiKey = openRouterKey
+                }
+                LaunchedEffect(Unit) {
+                    // Cek update otomatis (throttle 6 jam biar gak nembak GitHub API tiap buka app)
+                    val lastCheck = prefs.getLong("last_update_check", 0L)
+                    if (System.currentTimeMillis() - lastCheck > 6 * 60 * 60 * 1000L) {
+                        prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                        val release = GitHubUpdateChecker.checkLatest()
+                        if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
+                            updateInfo = release
+                        }
+                    }
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -192,6 +216,11 @@ class MainActivity : ComponentActivity() {
                                                 onDismissRequest = { showSettingsMenu = false }
                                             ) {
                                                 DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_version, BuildConfig.VERSION_NAME)) },
+                                                    onClick = {},
+                                                    enabled = false
+                                                )
+                                                DropdownMenuItem(
                                                     text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
                                                     onClick = { 
                                                         isDarkMode = !isDarkMode
@@ -227,6 +256,26 @@ class MainActivity : ComponentActivity() {
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Rounded.Route,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_check_update)) },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        scope.launch {
+                                                            val release = GitHubUpdateChecker.checkLatest()
+                                                            if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
+                                                                updateInfo = release
+                                                            } else {
+                                                                updateMessage = context.getString(R.string.update_no_update)
+                                                            }
+                                                        }
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.SystemUpdate,
                                                             contentDescription = null
                                                         )
                                                     }
@@ -411,6 +460,67 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            updateInfo?.let { release ->
+                                AlertDialog(
+                                    onDismissRequest = { if (!isDownloadingUpdate) updateInfo = null },
+                                    icon = { Icon(Icons.Rounded.SystemUpdate, contentDescription = null) },
+                                    title = { Text(stringResource(R.string.update_available_title)) },
+                                    text = {
+                                        Text(
+                                            text = if (isDownloadingUpdate) {
+                                                stringResource(R.string.update_downloading)
+                                            } else {
+                                                stringResource(R.string.update_available_message, release.versionName)
+                                            }
+                                        )
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            enabled = !isDownloadingUpdate,
+                                            onClick = {
+                                                scope.launch {
+                                                    isDownloadingUpdate = true
+                                                    try {
+                                                        val url = release.apkUrl
+                                                        if (url == null) throw IllegalStateException("APK tidak tersedia di release")
+                                                        val dest = File(context.cacheDir, "downloads/moneychat-${release.versionName}.apk")
+                                                        GitHubUpdateChecker.downloadApk(url, dest)
+                                                        installApk(context, dest)
+                                                    } catch (e: Exception) {
+                                                        updateMessage = context.getString(R.string.update_download_failed)
+                                                    } finally {
+                                                        isDownloadingUpdate = false
+                                                        updateInfo = null
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Text(stringResource(R.string.update_action))
+                                        }
+                                    },
+                                    dismissButton = {
+                                        if (!isDownloadingUpdate) {
+                                            TextButton(onClick = { updateInfo = null }) {
+                                                Text(stringResource(R.string.update_later))
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+
+                            updateMessage?.let { msg ->
+                                AlertDialog(
+                                    onDismissRequest = { updateMessage = null },
+                                    title = { Text(stringResource(R.string.update_check_title)) },
+                                    text = { Text(msg) },
+                                    confirmButton = {
+                                        TextButton(onClick = { updateMessage = null }) {
+                                            Text(stringResource(R.string.action_ok))
+                                        }
+                                    }
+                                )
+                            }
+
                             auditReport?.let { report ->
                                 AiReportDialog(
                                     reportText = report,
@@ -504,4 +614,15 @@ fun ApiKeyDialog(
         dismissButton = {                                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
+}
+
+/** Buka intent install untuk APK hasil unduhan (via FileProvider). */
+private fun installApk(context: Context, file: File) {
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
 }

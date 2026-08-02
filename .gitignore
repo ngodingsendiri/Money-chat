@@ -19,3 +19,8 @@ debug.keystore
 my-upload-key.jks
 *.jks
 /dist
+
+# Keystore release & backup creds (JANGAN PERNAH DI-COMMIT)
+*.jks
+keystore_base64.txt
+keystore_creds.txt

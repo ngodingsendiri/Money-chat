@@ -18,6 +18,8 @@
     <string name="menu_openrouter_key">Kunci OpenRouter API</string>
     <string name="menu_clear_data">Hapus Semua Data</string>
     <string name="menu_logout">Logout (%1$s)</string>
+    <string name="menu_check_update">Periksa Update</string>
+    <string name="menu_version">Versi %1$s</string>
 
     <!-- Dialog konfirmasi & API key -->
     <string name="confirm_clear_title">Hapus Semua Data?</string>
@@ -133,4 +135,15 @@
     <string name="confirm_delete_message_title">Hapus pesan?</string>
     <string name="confirm_delete_message_text">Pesan ini akan dihapus permanen dari obrolan.</string>
     <string name="chat_jump_bottom_desc">Ke pesan terbaru</string>
+
+    <!-- Update otomatis dari GitHub Release -->
+    <string name="update_available_title">Update Tersedia 🚀</string>
+    <string name="update_available_message">Versi baru %1$s sudah dirilis. Download &amp; install sekarang?</string>
+    <string name="update_action">Update Sekarang</string>
+    <string name="update_later">Nanti</string>
+    <string name="update_downloading">Mengunduh update…</string>
+    <string name="update_download_failed">Gagal mengunduh update. Coba lagi nanti.</string>
+    <string name="update_check_title">Periksa Update</string>
+    <string name="update_no_update">Aplikasi sudah versi terbaru ✅</string>
+    <string name="action_ok">OK</string>
 </resources>
