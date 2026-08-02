@@ -1,0 +1,22 @@
+name: Probe4
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        run: echo "step1"
+      - name: Build debug APK
+        run: |
+          echo "step2a"
+          echo "step2b"
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+        run: echo "step3"

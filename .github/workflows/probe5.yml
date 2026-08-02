@@ -1,0 +1,17 @@
+name: Probe5
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        run: echo "step1"
+      - name: Build signed release APK
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+        run: echo "step3"
