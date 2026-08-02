@@ -16,4 +16,6 @@
 local.properties
 .env
 debug.keystore
+my-upload-key.jks
+*.jks
 /dist

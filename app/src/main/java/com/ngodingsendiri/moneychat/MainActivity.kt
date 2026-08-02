@@ -1,10 +1,18 @@
-package com.example
+package com.ngodingsendiri.moneychat
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,25 +56,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.ui.MainViewModel
-import com.example.ui.screens.AddTransactionDialog
-import com.example.ui.screens.AiReportDialog
-import com.example.ui.screens.ChatScreen
-import com.example.ui.screens.RekapScreen
-import com.example.ui.theme.CoupleFinanceTheme
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.ngodingsendiri.moneychat.R
+import com.ngodingsendiri.moneychat.ui.MainViewModel
+import com.ngodingsendiri.moneychat.ui.screens.AddTransactionDialog
+import com.ngodingsendiri.moneychat.ui.screens.AiReportDialog
+import com.ngodingsendiri.moneychat.ui.screens.ChatScreen
+import com.ngodingsendiri.moneychat.ui.screens.RekapScreen
+import com.ngodingsendiri.moneychat.ui.theme.CoupleFinanceTheme
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -78,7 +90,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = androidx.compose.ui.platform.LocalContext.current
-            val prefs = remember { context.getSharedPreferences("couple_finance_prefs", android.content.Context.MODE_PRIVATE) }
+            val prefs = remember {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                EncryptedSharedPreferences.create(
+                    context,
+                    "secure_prefs",
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            }
             var isDarkMode by remember { mutableStateOf(prefs.getBoolean("is_dark_mode", false)) }
 
             CoupleFinanceTheme(darkTheme = isDarkMode) {
@@ -92,7 +115,7 @@ class MainActivity : ComponentActivity() {
                 val isAuditLoading by viewModel.isAuditLoading.collectAsStateWithLifecycle()
                 val quickSuggestions by viewModel.quickSuggestions.collectAsStateWithLifecycle()
 
-                var selectedTab by remember { mutableIntStateOf(0) }
+                var selectedTab by rememberSaveable { mutableIntStateOf(0) }
                 var showAddDialog by remember { mutableStateOf(false) }
                 var showSettingsMenu by remember { mutableStateOf(false) }
                 var showGeminiKeyDialog by remember { mutableStateOf(false) }
@@ -101,26 +124,32 @@ class MainActivity : ComponentActivity() {
 
                 var workspacePin by remember { mutableStateOf(prefs.getString("workspace_pin", null)) }
                 var userName by remember { mutableStateOf(prefs.getString("user_name", null)) }
+                var firebaseReady by remember { mutableStateOf(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null) }
                 var geminiKey by remember { mutableStateOf(prefs.getString("gemini_api_key", null)) }
                 var openRouterKey by remember { mutableStateOf(prefs.getString("openrouter_api_key", null)) }
 
                 LaunchedEffect(workspacePin, userName) {
-                    workspacePin?.let { com.example.data.remote.FirestoreSyncManager.setWorkspaceId(it) }
+                    if (workspacePin != null) {
+                        viewModel.startCloudSync(workspacePin)
+                    } else {
+                        viewModel.stopCloudSync()
+                    }
                     userName?.let { viewModel.setSender(it) }
                 }
                 LaunchedEffect(geminiKey) {
-                    com.example.data.remote.GeminiService.userApiKey = geminiKey
+                    com.ngodingsendiri.moneychat.data.remote.GeminiService.userApiKey = geminiKey
                 }
                 LaunchedEffect(openRouterKey) {
-                    com.example.data.remote.OpenRouterService.userApiKey = openRouterKey
+                    com.ngodingsendiri.moneychat.data.remote.OpenRouterService.userApiKey = openRouterKey
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     GlowingBackground()
 
-                    if (workspacePin == null || userName == null) {
-                        com.example.ui.screens.PinConnectScreen(
+                    if (workspacePin == null || userName == null || !firebaseReady) {
+                        com.ngodingsendiri.moneychat.ui.screens.PinConnectScreen(
                             onPinConnected = { pin, name ->
+                                firebaseReady = true
                                 prefs.edit()
                                     .putString("workspace_pin", pin)
                                     .putString("user_name", name)
@@ -138,12 +167,12 @@ class MainActivity : ComponentActivity() {
                                     title = {
                                         Column {
                                             Text(
-                                                text = "Keuangan Bersama",
+                                                text = stringResource(R.string.topbar_title),
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 18.sp
                                             )
                                             Text(
-                                                text = "Pencatatan & Analisis Finansial",
+                                                text = stringResource(R.string.topbar_subtitle),
                                                 fontSize = 11.sp,
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                                             )
@@ -154,7 +183,7 @@ class MainActivity : ComponentActivity() {
                                             IconButton(onClick = { showSettingsMenu = true }) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.MoreVert,
-                                                    contentDescription = "Pengaturan",
+                                                    contentDescription = stringResource(R.string.action_settings),
                                                     tint = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
@@ -163,7 +192,7 @@ class MainActivity : ComponentActivity() {
                                                 onDismissRequest = { showSettingsMenu = false }
                                             ) {
                                                 DropdownMenuItem(
-                                                    text = { Text(if (isDarkMode) "Mode Terang" else "Mode Gelap") },
+                                                    text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
                                                     onClick = { 
                                                         isDarkMode = !isDarkMode
                                                         prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply()
@@ -177,7 +206,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Kunci Gemini API") },
+                                                    text = { Text(stringResource(R.string.menu_gemini_key)) },
                                                     onClick = {
                                                         showSettingsMenu = false
                                                         showGeminiKeyDialog = true
@@ -190,7 +219,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Kunci OpenRouter API") },
+                                                    text = { Text(stringResource(R.string.menu_openrouter_key)) },
                                                     onClick = {
                                                         showSettingsMenu = false
                                                         showOpenRouterKeyDialog = true
@@ -203,7 +232,7 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Hapus Semua Data") },
+                                                    text = { Text(stringResource(R.string.menu_clear_data)) },
                                                     onClick = { 
                                                         showSettingsMenu = false
                                                         showConfirmClearDialog = true
@@ -216,8 +245,10 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 )
                                                 DropdownMenuItem(
-                                                    text = { Text("Logout (" + (userName ?: "User") + ")") },
+                                                    text = { Text(stringResource(R.string.menu_logout, userName ?: "User")) },
                                                     onClick = { 
+                                                        com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                                                        firebaseReady = false
                                                         prefs.edit().clear().apply()
                                                         workspacePin = null
                                                         userName = null
@@ -250,10 +281,10 @@ class MainActivity : ComponentActivity() {
                                         icon = {
                                             Icon(
                                                 imageVector = if (selectedTab == 0) Icons.Rounded.ChatBubble else Icons.Rounded.ChatBubbleOutline,
-                                                contentDescription = "Chat"
+                                                contentDescription = stringResource(R.string.tab_chat_desc)
                                             )
                                         },
-                                        label = { Text("Diskusi") },
+                                        label = { Text(stringResource(R.string.tab_diskusi)) },
                                         modifier = Modifier.testTag("tab_chat")
                                     )
 
@@ -263,10 +294,10 @@ class MainActivity : ComponentActivity() {
                                         icon = {
                                             Icon(
                                                 imageVector = Icons.Rounded.PieChart,
-                                                contentDescription = "Rekap"
+                                                contentDescription = stringResource(R.string.tab_rekap_desc)
                                             )
                                         },
-                                        label = { Text("Rekap") },
+                                        label = { Text(stringResource(R.string.tab_rekap)) },
                                         modifier = Modifier.testTag("tab_rekap")
                                     )
                                 }
@@ -277,25 +308,43 @@ class MainActivity : ComponentActivity() {
                                     .fillMaxSize()
                                     .padding(innerPadding)
                             ) {
-                                when (selectedTab) {
-                                    0 -> ChatScreen(
-                                        quickSuggestions = quickSuggestions,
-                                        messages = messages,
-                                        activeSender = activeSender,
-                                        isAiThinking = isAiThinking,
-                                        onSendMessage = { viewModel.sendMessage(it) },
-                                        onAskAiClicked = { viewModel.askAiInChat(it) }
-                                    )
+                                AnimatedContent(
+                                    targetState = selectedTab,
+                                    transitionSpec = {
+                                        val forward = targetState > initialState
+                                        val enter = slideInHorizontally(
+                                            initialOffsetX = { if (forward) it / 5 else -it / 5 },
+                                            animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                        ) + fadeIn(animationSpec = tween(300, easing = FastOutSlowInEasing))
+                                        val exit = slideOutHorizontally(
+                                            targetOffsetX = { if (forward) -it / 5 else it / 5 },
+                                            animationSpec = tween(300, easing = FastOutSlowInEasing)
+                                        ) + fadeOut(animationSpec = tween(220, easing = FastOutSlowInEasing))
+                                        enter togetherWith exit
+                                    },
+                                    label = "tabContent"
+                                ) { tab ->
+                                    when (tab) {
+                                        0 -> ChatScreen(
+                                            quickSuggestions = quickSuggestions,
+                                            messages = messages,
+                                            activeSender = activeSender,
+                                            isAiThinking = isAiThinking,
+                                            onSendMessage = { viewModel.sendMessage(it) },
+                                            onAskAiClicked = { viewModel.askAiInChat(it) },
+                                            onDeleteMessage = { viewModel.deleteChatMessage(it) }
+                                        )
 
-                                    1 -> RekapScreen(
-                                        transactions = transactions,
-                                        totalIncome = totalIncome,
-                                        totalExpense = totalExpense,
-                                        isAuditLoading = isAuditLoading,
-                                        onGenerateAudit = { viewModel.generateAiAuditReport() },
-                                        onAddTransactionClicked = { showAddDialog = true },
-                                        onDeleteTransaction = { viewModel.deleteTransaction(it) }
-                                    )
+                                        1 -> RekapScreen(
+                                            transactions = transactions,
+                                            totalIncome = totalIncome,
+                                            totalExpense = totalExpense,
+                                            isAuditLoading = isAuditLoading,
+                                            onGenerateAudit = { viewModel.generateAiAuditReport() },
+                                            onAddTransactionClicked = { showAddDialog = true },
+                                            onDeleteTransaction = { viewModel.deleteTransaction(it) }
+                                        )
+                                    }
                                 }
                             }
 
@@ -311,8 +360,8 @@ class MainActivity : ComponentActivity() {
 
                             if (showGeminiKeyDialog) {
                                 ApiKeyDialog(
-                                    title = "Kunci Gemini API",
-                                    hint = "Masukkan API key Gemini milik akun Google-mu (bikin gratis di aistudio.google.com/apikey). Key dipakai langsung dari perangkatmu — server tidak perlu menyediakan API key.",
+                                    title = stringResource(R.string.menu_gemini_key),
+                                    hint = stringResource(R.string.gemini_key_hint),
                                     initialKey = geminiKey ?: "",
                                     onDismiss = { showGeminiKeyDialog = false },
                                     onSave = { newKey ->
@@ -325,8 +374,8 @@ class MainActivity : ComponentActivity() {
 
                             if (showOpenRouterKeyDialog) {
                                 ApiKeyDialog(
-                                    title = "Kunci OpenRouter API",
-                                    hint = "Masukkan API key OpenRouter-mu (bikin gratis di openrouter.ai/keys). Aplikasi otomatis memakai model GRATIS OpenRouter dan pindah ke model gratis lain kalau satu kena rate limit. Key tersimpan lokal di perangkat — server tidak menyediakan API key.",
+                                    title = stringResource(R.string.menu_openrouter_key),
+                                    hint = stringResource(R.string.openrouter_key_hint),
                                     initialKey = openRouterKey ?: "",
                                     onDismiss = { showOpenRouterKeyDialog = false },
                                     onSave = { newKey ->
@@ -340,9 +389,9 @@ class MainActivity : ComponentActivity() {
                             if (showConfirmClearDialog) {
                                 AlertDialog(
                                     onDismissRequest = { showConfirmClearDialog = false },
-                                    title = { Text("Hapus Semua Data?") },
+                                    title = { Text(stringResource(R.string.confirm_clear_title)) },
                                     text = {
-                                        Text("Semua pesan obrolan dan transaksi keuangan akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.")
+                                        Text(stringResource(R.string.confirm_clear_message))
                                     },
                                     confirmButton = {
                                         TextButton(
@@ -351,12 +400,12 @@ class MainActivity : ComponentActivity() {
                                                 showConfirmClearDialog = false
                                             }
                                         ) {
-                                            Text("Hapus", color = MaterialTheme.colorScheme.error)
+                                            Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                                         }
                                     },
                                     dismissButton = {
                                         TextButton(onClick = { showConfirmClearDialog = false }) {
-                                            Text("Batal")
+                                            Text(stringResource(R.string.action_cancel))
                                         }
                                     }
                                 )
@@ -393,7 +442,6 @@ fun GlowingBackground() {
                 .size(300.dp)
                 .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(primary, Color.Transparent)))
-                .blur(80.dp)
         )
         Box(
             modifier = Modifier
@@ -402,7 +450,6 @@ fun GlowingBackground() {
                 .size(350.dp)
                 .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(secondary, Color.Transparent)))
-                .blur(80.dp)
         )
         Box(
             modifier = Modifier
@@ -411,7 +458,6 @@ fun GlowingBackground() {
                 .size(250.dp)
                 .clip(CircleShape)
                 .background(Brush.radialGradient(listOf(tertiary, Color.Transparent)))
-                .blur(80.dp)
         )
     }
 }
@@ -440,7 +486,7 @@ fun ApiKeyDialog(
                 OutlinedTextField(
                     value = key,
                     onValueChange = { key = it },
-                    label = { Text("API Key") },
+                    label = { Text(stringResource(R.string.api_key_label)) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
@@ -452,11 +498,10 @@ fun ApiKeyDialog(
                 onClick = { onSave(key.trim()) },
                 enabled = key.isNotBlank()
             ) {
-                Text("Simpan")
+                Text(stringResource(R.string.action_save))
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Batal") }
+        dismissButton = {                                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

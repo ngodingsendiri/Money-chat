@@ -1,6 +1,7 @@
-package com.example.data.remote
+package com.ngodingsendiri.moneychat.data.remote
 
-import com.example.BuildConfig
+import android.util.Log
+import com.ngodingsendiri.moneychat.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -62,7 +63,7 @@ object OpenRouterService {
                 val text = tryModel(key, model, prompt)
                 if (!text.isNullOrBlank()) return@withContext text
             } catch (e: Exception) {
-                e.printStackTrace() // model ini gagal → lanjut ke model berikutnya
+                Log.w("OpenRouterService", "Model gagal, rotasi ke model gratis berikutnya", e)
             }
         }
         null

@@ -1,0 +1,53 @@
+package com.ngodingsendiri.moneychat.data.local
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+@Database(
+    entities = [ChatMessage::class, FinancialTransaction::class],
+    version = 3,
+    exportSchema = false
+)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun chatMessageDao(): ChatMessageDao
+    abstract fun transactionDao(): TransactionDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: AppDatabase? = null
+
+        // v1 -> v2: tambah index timestamp di chat_messages (performa query urut waktu)
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_chat_messages_timestamp ON chat_messages(timestamp)")
+            }
+        }
+
+        // v2 -> v3: kolom cloudId (ID dokumen Firestore) untuk sinkronisasi antar perangkat
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN cloudId TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_chat_messages_cloudId ON chat_messages(cloudId)")
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN cloudId TEXT")
+            }
+        }
+
+        fun getDatabase(context: Context): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "keuangan_pasutri_db"
+                )
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}

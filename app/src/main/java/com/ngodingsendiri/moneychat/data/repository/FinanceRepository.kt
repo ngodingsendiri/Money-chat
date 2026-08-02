@@ -1,15 +1,17 @@
-package com.example.data.repository
+package com.ngodingsendiri.moneychat.data.repository
 
-import com.example.data.local.ChatMessage
-import com.example.data.local.ChatMessageDao
-import com.example.data.local.FinancialTransaction
-import com.example.data.local.TransactionDao
-import com.example.data.remote.GeminiService
-import com.example.data.remote.FirestoreSyncManager
+import com.ngodingsendiri.moneychat.data.local.ChatMessage
+import com.ngodingsendiri.moneychat.data.local.ChatMessageDao
+import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
+import com.ngodingsendiri.moneychat.data.local.TransactionDao
+import com.ngodingsendiri.moneychat.data.remote.FirestoreSyncManager
+import com.ngodingsendiri.moneychat.data.remote.GeminiService
+import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.UUID
 
 class FinanceRepository(
     private val chatMessageDao: ChatMessageDao,
@@ -19,13 +21,27 @@ class FinanceRepository(
     val allMessages: Flow<List<ChatMessage>> = chatMessageDao.getAllMessages()
     val allTransactions: Flow<List<FinancialTransaction>> = transactionDao.getAllTransactions()
 
+    /** Aktifkan sinkronisasi cloud (wajib sudah login Google + listener realtime). */
+    suspend fun startCloudSync(pin: String) {
+        if (FirestoreSyncManager.isSignedIn()) {
+            FirestoreSyncManager.start(pin, chatMessageDao, transactionDao)
+        } else {
+            Log.w(TAG, "Cloud sync dilewati: belum login dengan akun Google")
+        }
+    }
+
+    fun stopCloudSync() {
+        FirestoreSyncManager.stop()
+    }
+
     suspend fun sendMessage(sender: String, messageText: String) {
         withContext(Dispatchers.IO) {
-        // 1. Insert user chat message
+        // 1. Insert user chat message (cloudId unik lintas perangkat)
         val initialMsg = ChatMessage(
             sender = sender,
             messageText = messageText,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            cloudId = UUID.randomUUID().toString()
         )
         val msgId = chatMessageDao.insertMessage(initialMsg)
 
@@ -45,10 +61,10 @@ class FinanceRepository(
                 description = aiResult.description ?: messageText,
                 loggedBy = sender,
                 timestamp = System.currentTimeMillis(),
-                chatMessageId = msgId
+                chatMessageId = msgId,
+                cloudId = UUID.randomUUID().toString()
             )
-            val transId = transactionDao.insertTransaction(trans)
-            FirestoreSyncManager.syncTransaction(trans.copy(id = transId))
+            transactionDao.insertTransaction(trans)
 
             // Update user message with financial badge tags on the message itself
             finalMsg = initialMsg.copy(
@@ -59,10 +75,13 @@ class FinanceRepository(
                 detectedType = aiResult.type
             )
             chatMessageDao.insertMessage(finalMsg)
+
+            // Sync transaksi ke cloud supaya pasangan/keluarga di perangkat lain ikut melihat
+            FirestoreSyncManager.syncTransaction(trans)
         }
 
-        // Sync message to Cloud Firestore
-        FirestoreSyncManager.syncChatMessage(finalMsg)
+        // Push ke cloud supaya pasangan/keluarga di perangkat lain ikut melihat
+        FirestoreSyncManager.syncMessage(finalMsg)
 
         // NO AUTOMATIC AI CHAT BUBBLE HERE! Chat stays clean between Husband & Wife.
     }
@@ -70,33 +89,50 @@ class FinanceRepository(
 
     suspend fun askAiInChat(prompt: String): String {
         return withContext(Dispatchers.IO) {
-        // Only created when user explicitly requests AI input/advice
-        val recentList = chatMessageDao.getAllMessages().first().takeLast(10)
-        val aiResult = GeminiService.parseChatMessage(prompt, "PASUTRI", recentList)
-        
+        // Jawaban AI bebas (bukan parser transaksi) saat user menekan tombol ✨ Tanya AI
+        val reply = GeminiService.askAiChat(prompt)
+
         val aiMsg = ChatMessage(
             sender = "AI",
-            messageText = aiResult.aiReply,
-            timestamp = System.currentTimeMillis()
+            messageText = reply,
+            timestamp = System.currentTimeMillis(),
+            cloudId = UUID.randomUUID().toString()
         )
-        val msgId = chatMessageDao.insertMessage(aiMsg)
-        FirestoreSyncManager.syncChatMessage(aiMsg.copy(id = msgId))
+        chatMessageDao.insertMessage(aiMsg)
+        FirestoreSyncManager.syncMessage(aiMsg)
 
-        aiResult.aiReply
+        reply
         }
     }
 
     suspend fun addManualTransaction(transaction: FinancialTransaction) {
         withContext(Dispatchers.IO) {
-        val id = transactionDao.insertTransaction(transaction)
-        FirestoreSyncManager.syncTransaction(transaction.copy(id = id))
+        val withCloud = transaction.copy(cloudId = transaction.cloudId ?: UUID.randomUUID().toString())
+        transactionDao.insertTransaction(withCloud)
+        FirestoreSyncManager.syncTransaction(withCloud)
+        }
+    }
+
+    /** Perbarui transaksi (edit) lalu sinkronkan ke cloud. */
+    suspend fun updateTransaction(transaction: FinancialTransaction) {
+        withContext(Dispatchers.IO) {
+        transactionDao.updateTransaction(transaction)
+        transaction.cloudId?.let { FirestoreSyncManager.syncTransaction(transaction) }
+        }
+    }
+
+    suspend fun deleteChatMessage(messageId: Long) {
+        withContext(Dispatchers.IO) {
+        val msg = chatMessageDao.getById(messageId) ?: return@withContext
+        chatMessageDao.deleteMessage(messageId)
+        msg.cloudId?.let { FirestoreSyncManager.deleteMessage(it) }
         }
     }
 
     suspend fun deleteTransaction(transaction: FinancialTransaction) {
         withContext(Dispatchers.IO) {
         transactionDao.deleteTransaction(transaction)
-        FirestoreSyncManager.deleteTransactionFromCloud(transaction.id)
+        transaction.cloudId?.let { FirestoreSyncManager.deleteTransaction(it) }
         }
     }
 
@@ -104,6 +140,7 @@ class FinanceRepository(
         withContext(Dispatchers.IO) {
         chatMessageDao.deleteAllMessages()
         transactionDao.deleteAllTransactions()
+        FirestoreSyncManager.clearFamilyData()
         }
     }
 

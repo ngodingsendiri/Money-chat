@@ -7,6 +7,7 @@ name: Build APK
 #     KEYSTORE_BASE64    -> isi file keystore (.jks) dalam base64
 #     KEYSTORE_PASSWORD  -> password keystore (STORE_PASSWORD)
 #     KEY_PASSWORD       -> password key (alias "upload")
+# - Nama artifact mengikuti versionName di app/build.gradle.kts (tidak perlu edit manual).
 
 on:
   push:
@@ -16,6 +17,11 @@ on:
 
 permissions:
   contents: write
+
+# Hanya satu build berjalan dalam satu waktu; push baru membatalkan yang antri.
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
 
 jobs:
   build-apk:
@@ -39,6 +45,12 @@ jobs:
             -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Build debug APK
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -47,7 +59,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: MoneyChat-v1.0.1-debug
+          name: MoneyChat-${{ steps.version.outputs.version }}-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -69,7 +81,7 @@ jobs:
       - name: Upload release APK (jika ada)
         uses: actions/upload-artifact@v4
         with:
-          name: MoneyChat-v1.0.1-release
+          name: MoneyChat-${{ steps.version.outputs.version }}-release
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: warn
 

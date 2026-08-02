@@ -1,4 +1,4 @@
-package com.example.data.local
+package com.ngodingsendiri.moneychat.data.local
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -13,5 +13,6 @@ data class FinancialTransaction(
     val description: String,
     val loggedBy: String, // "ISTRI", "SUAMI", "AI"
     val timestamp: Long = System.currentTimeMillis(),
-    val chatMessageId: Long? = null
+    val chatMessageId: Long? = null,
+    val cloudId: String? = null // ID dokumen Firestore (unik lintas perangkat)
 )

@@ -1,8 +1,9 @@
-package com.example.data.remote
+package com.ngodingsendiri.moneychat.data.remote
 
-import com.example.BuildConfig
-import com.example.data.local.ChatMessage
-import com.example.data.local.FinancialTransaction
+import android.util.Log
+import com.ngodingsendiri.moneychat.BuildConfig
+import com.ngodingsendiri.moneychat.data.local.ChatMessage
+import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -59,7 +60,7 @@ object GeminiService {
                     if (parsed != null) return@withContext parsed
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -73,7 +74,7 @@ object GeminiService {
                     return@withContext parsed
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -125,7 +126,7 @@ object GeminiService {
                     if (suggestions.isNotEmpty()) return@withContext suggestions
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -144,7 +145,7 @@ object GeminiService {
                     if (suggestions.isNotEmpty()) return@withContext suggestions
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -197,7 +198,7 @@ object GeminiService {
                     return@withContext text
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -210,7 +211,7 @@ object GeminiService {
                     return@withContext text
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
         }
 
@@ -224,6 +225,57 @@ object GeminiService {
             1. **Optimalisasi Anggaran Rutin**: Tetapkan batas plafon mingguan untuk pos operasional harian agar alokasi kas terprediksi.
             2. **Alokasi Dana Cadangan**: Sisihkan minimal 10%–15% dari pemasukan ke kas cadangan sebelum memenuhi pengeluaran sekunder.
         """.trimIndent()
+    }
+
+    /** Jawaban AI bebas (untuk tombol ✨ Tanya AI) — memakai prompt percakapan,
+     *  BUKAN parser transaksi. Prioritas: OpenRouter → Gemini → balasan offline. */
+    suspend fun askAiChat(prompt: String): String = withContext(Dispatchers.IO) {
+        val chatPrompt = """
+            Kamu adalah asisten keuangan pribadi 'Money Chat' untuk pasangan/keluarga di Indonesia.
+            Jawab pertanyaan berikut dengan bahasa Indonesia yang ramah, jelas, dan praktis.
+            Jika pertanyaan menyangkut angka/keuangan, berikan saran yang realistis dan aman.
+
+            Pertanyaan: $prompt
+        """.trimIndent()
+
+        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+        if (OpenRouterService.activeApiKey() != null) {
+            try {
+                val text = OpenRouterService.completeChat(chatPrompt)
+                if (!text.isNullOrBlank()) return@withContext text
+            } catch (e: Exception) {
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+            }
+        }
+
+        // 2) Gemini API (BYOK atau key bawaan app)
+        val apiKey = getApiKey()
+        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+            try {
+                val jsonResponse = callGeminiApi(chatPrompt, apiKey)
+                val text = extractTextFromGeminiResponse(jsonResponse)
+                if (!text.isNullOrBlank()) return@withContext text
+            } catch (e: Exception) {
+                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+            }
+        }
+
+        // 3) Balasan offline (tanpa internet / tanpa key)
+        return@withContext offlineChatReply(prompt)
+    }
+
+    private fun offlineChatReply(prompt: String): String {
+        val lower = prompt.lowercase()
+        return when {
+            lower.contains("hemat") || lower.contains("nabung") || lower.contains("tabung") ->
+                "Tips hemat: (1) catat dulu semua pengeluaran kecil, (2) tetapkan plafon mingguan untuk makan & transportasi, (3) sisihkan 10–15% pemasukan ke dana cadangan di awal bulan, (4) pisahkan uang rutin per pos (amplop digital). Mau kubantu susun anggaran mingguanmu? 😊"
+            lower.contains("gaji") || lower.contains("pemasukan") ->
+                "Untuk mengatur gaji: alokasikan ±50% untuk kebutuhan pokok, 30% tabungan/cadangan, dan 20% keinginan. Mulai dengan mencatat semua transaksi lewat obrolan ini — nanti aku rekap & evaluasi otomatis. 💰"
+            lower.contains("hutang") || lower.contains("utang") ->
+                "Untuk melunasi utang: pilih metode snowball (lunasi yang terkecil dulu biar semangat) atau avalanche (lunasi yang bunganya terbesar dulu biar lebih hemat). Sisihkan minimal 20% pemasukan untuk cicilan. 💪"
+            else ->
+                "Aku adalah asisten keuangan Money Chat. Aku bisa mencatat transaksi dari obrolan, memberi rekap & analisis pengeluaran, serta tips keuangan. Saat ini mode AI sedang offline — sambungkan kunci OpenRouter/Gemini di menu Pengaturan agar aku bisa menjawab lebih pintar! 😊"
+        }
     }
 
     private fun buildParsePrompt(messageText: String, sender: String): String {
@@ -338,6 +390,7 @@ object GeminiService {
                 )
             }
         } catch (e: Exception) {
+            Log.w("GeminiService", "Respons AI bukan JSON valid", e)
             null
         }
     }
@@ -375,8 +428,7 @@ object GeminiService {
                 textLower.contains("sewa") || textLower.contains("pulsa") ||
                 textLower.contains("listrik") || textLower.contains("air") ||
                 textLower.contains("popok") || textLower.contains("susu") ||
-                textLower.contains("makan") || textLower.contains("transaksi") ||
-                amount > 0
+                textLower.contains("makan") || textLower.contains("transaksi")
         )
 
         if (isIncome && amount != null && amount > 0) {

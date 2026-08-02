@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "661773606228",
+    "project_id": "chat-keuangan",
+    "storage_bucket": "chat-keuangan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:661773606228:android:96727e0ea273945dc97cc1",
+        "android_client_info": {
+          "package_name": "com.ngodingsendiri.moneychat"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "661773606228-jq5eiscugdi4j9qg35p9rop2l41kr6fu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEI03bxFMZopilNDIurhS4t2iZ-j9wWNY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "661773606228-jq5eiscugdi4j9qg35p9rop2l41kr6fu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

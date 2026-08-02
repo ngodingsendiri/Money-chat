@@ -1,3 +1,136 @@
 <resources>
+    <!-- App -->
     <string name="app_name">Money Chat</string>
+
+    <!-- Top bar & navigasi -->
+    <string name="topbar_title">Keuangan Bersama</string>
+    <string name="topbar_subtitle">Pencatatan &amp; Analisis Finansial</string>
+    <string name="action_settings">Pengaturan</string>
+    <string name="tab_diskusi">Diskusi</string>
+    <string name="tab_rekap">Rekap</string>
+    <string name="tab_chat_desc">Chat</string>
+    <string name="tab_rekap_desc">Rekap</string>
+
+    <!-- Menu pengaturan -->
+    <string name="menu_mode_light">Mode Terang</string>
+    <string name="menu_mode_dark">Mode Gelap</string>
+    <string name="menu_gemini_key">Kunci Gemini API</string>
+    <string name="menu_openrouter_key">Kunci OpenRouter API</string>
+    <string name="menu_clear_data">Hapus Semua Data</string>
+    <string name="menu_logout">Logout (%1$s)</string>
+
+    <!-- Dialog konfirmasi & API key -->
+    <string name="confirm_clear_title">Hapus Semua Data?</string>
+    <string name="confirm_clear_message">Semua pesan obrolan dan transaksi keuangan akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_save">Simpan</string>
+    <string name="api_key_label">API Key</string>
+    <string name="gemini_key_hint">Masukkan API key Gemini milik akun Google-mu (bikin gratis di aistudio.google.com/apikey). Key dipakai langsung dari perangkatmu — server tidak perlu menyediakan API key.</string>
+    <string name="openrouter_key_hint">Masukkan API key OpenRouter-mu (bikin gratis di openrouter.ai/keys). Aplikasi otomatis memakai model GRATIS OpenRouter dan pindah ke model gratis lain kalau satu kena rate limit. Key tersimpan lokal di perangkat — server tidak menyediakan API key.</string>
+
+    <!-- Chat -->
+    <string name="chat_empty_title">Belum ada diskusi</string>
+    <string name="chat_empty_hint">Kirim pesan atau catat transaksi untuk memulai.</string>
+    <string name="chat_input_placeholder">Ketik pesan...</string>
+    <string name="chat_send_desc">Kirim</string>
+    <string name="chat_ask_ai_desc">Tanya AI</string>
+    <string name="chat_ai_thinking">AI sedang memproses...</string>
+    <string name="sender_bendahara">Bendahara</string>
+    <string name="sender_anggota">Anggota</string>
+    <string name="sender_ketua">Ketua</string>
+    <string name="sender_ai">Asisten AI</string>
+
+    <!-- Rekap -->
+    <string name="rekap_ai_title">Analisis AI Finansial</string>
+    <string name="rekap_ai_subtitle">Dapatkan rekomendasi alokasi kas &amp; hemat anggaran</string>
+    <string name="rekap_ai_action">Evaluasi</string>
+    <string name="rekap_category_header">📊 Alokasi Pengeluaran</string>
+    <string name="rekap_history_header">📝 Riwayat Transaksi</string>
+    <string name="rekap_add">Tambah</string>
+    <string name="filter_all">Semua</string>
+    <string name="filter_expense">Pengeluaran</string>
+    <string name="filter_income">Pemasukan</string>
+    <string name="rekap_empty_title">Belum Ada Transaksi</string>
+    <string name="rekap_empty_hint">Kirim pesan obrolan atau klik \'Tambah\' untuk mencatat transaksi finansial.</string>
+    <string name="rekap_search_placeholder">Cari transaksi atau kategori...</string>
+    <string name="rekap_search_desc">Cari transaksi</string>
+    <string name="rekap_search_clear">Bersihkan pencarian</string>
+    <string name="rekap_search_empty_title">Tidak Ditemukan</string>
+    <string name="rekap_search_empty_hint">Coba kata kunci lain atau ubah filter.</string>
+    <string name="rekap_delete_title">Hapus transaksi?</string>
+    <string name="rekap_delete_message">Transaksi ini akan dihapus permanen dari rekap dan cloud.</string>
+    <string name="rekap_month_count">%1$d transaksi</string>
+    <string name="rekap_edit_desc">Edit transaksi</string>
+    <string name="rekap_fab_desc">Tambah Transaksi</string>
+    <string name="balance_title">Total Saldo</string>
+    <string name="balance_local">Tersinkron otomatis</string>
+    <string name="income_label">Pemasukan</string>
+    <string name="expense_label">Pengeluaran</string>
+    <string name="donut_total">Total</string>
+    <string name="donut_expense">Total Pengeluaran</string>
+    <string name="tag_bendahara">💳 Bendahara</string>
+    <string name="tag_anggota">👤 Anggota</string>
+    <string name="tag_ketua">👑 Ketua</string>
+    <string name="tag_istri">👩 Istri</string>
+    <string name="tag_suami">👨 Suami</string>
+    <string name="tag_other">👤 %1$s</string>
+
+    <!-- PIN / onboarding -->
+    <string name="pin_image_desc">Ilustrasi onboarding</string>
+    <string name="pin_title">Mulai Pencatatan</string>
+    <string name="pin_subtitle">Masuk dengan akun Google-mu, lalu buat atau masukkan PIN untuk memulai workspace keuangan bersama. Data keluarga tersinkron otomatis antar perangkat.</string>
+
+    <!-- Google Sign-In -->
+    <string name="google_sign_in">Masuk dengan Google</string>
+    <string name="google_signing_in">Menghubungkan…</string>
+    <string name="google_sign_out">Ganti Akun</string>
+    <string name="google_sign_out_desc">Keluar dari akun Google</string>
+    <string name="google_required_hint">Setiap anggota masuk dengan akun Google-nya masing-masing, lalu dipersatukan dalam satu workspace keluarga lewat PIN. Data tersimpan aman di cloud Firebase per workspace.</string>
+    <string name="google_signed_in_as">Masuk sebagai %1$s</string>
+    <string name="google_connected_hint">Terhubung &amp; siap dipakai</string>
+    <string name="google_sign_in_failed">Gagal masuk dengan Google. Coba lagi.</string>
+    <string name="google_not_configured">Google Sign-In belum dikonfigurasi. Aktifkan Google di Firebase Console (Authentication → Sign-in method), lalu unduh ulang google-services.json dan ganti file di folder app/.</string>
+    <string name="pin_name_label">Nama Anda (Cth: Suami / Istri)</string>
+    <string name="pin_your_pin">PIN Anda</string>
+    <string name="pin_share_hint">Gunakan PIN ini untuk menghubungkan akun pada perangkat lain.</string>
+    <string name="pin_enter">Masuk</string>
+    <string name="pin_input_label">Masukkan PIN</string>
+    <string name="pin_join">Gabung</string>
+    <string name="pin_create">Buat PIN</string>
+    <string name="pin_use">Gunakan PIN</string>
+    <string name="pin_default_name">Pengguna</string>
+    <string name="pin_default_google_name">Anggota</string>
+
+    <!-- Dialog tambah transaksi -->
+    <string name="add_dialog_title">Catat Transaksi Manual</string>
+    <string name="add_dialog_edit_title">Edit Transaksi</string>
+    <string name="add_type_expense">Pengeluaran</string>
+    <string name="add_type_income">Pemasukan</string>
+    <string name="add_amount_label">Nominal (Rp)</string>
+    <string name="add_amount_placeholder">Contoh: 150000</string>
+    <string name="add_amount_error">Nominal harus lebih dari 0</string>
+    <string name="add_desc_label">Keterangan Transaksi</string>
+    <string name="add_desc_placeholder">Contoh: Belanja bahan pokok harian</string>
+    <string name="add_category_label">Kategori</string>
+    <string name="add_logged_by">Dicatat Oleh:</string>
+    <string name="role_bendahara">Bendahara</string>
+    <string name="role_anggota">Anggota</string>
+    <string name="role_ketua">Ketua</string>
+    <string name="add_cancel">Batal</string>
+    <string name="add_save">Simpan</string>
+
+    <!-- Laporan AI -->
+    <string name="report_title">Laporan Evaluasi Keuangan AI</string>
+    <string name="report_close_desc">Tutup</string>
+    <string name="report_close">Tutup Laporan</string>
+
+    <!-- Chat: fitur lanjutan -->
+    <string name="today_label">Hari Ini</string>
+    <string name="yesterday_label">Kemarin</string>
+    <string name="chat_copy">Salin</string>
+    <string name="chat_delete">Hapus Pesan</string>
+    <string name="confirm_delete_message_title">Hapus pesan?</string>
+    <string name="confirm_delete_message_text">Pesan ini akan dihapus permanen dari obrolan.</string>
+    <string name="chat_jump_bottom_desc">Ke pesan terbaru</string>
 </resources>

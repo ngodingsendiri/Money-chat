@@ -1,12 +1,13 @@
-package com.example.ui
+package com.ngodingsendiri.moneychat.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.local.AppDatabase
-import com.example.data.local.ChatMessage
-import com.example.data.local.FinancialTransaction
-import com.example.data.repository.FinanceRepository
+import com.ngodingsendiri.moneychat.data.local.AppDatabase
+import com.ngodingsendiri.moneychat.data.local.ChatMessage
+import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
+import com.ngodingsendiri.moneychat.data.repository.FinanceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -77,7 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         try {
                             _quickSuggestions.value = repository.getFrequentTransactionSuggestions(list)
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Log.w("MainViewModel", "Operasi gagal", e)
                         }
                     } else {
                         _quickSuggestions.value = listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
@@ -91,17 +92,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _activeSender.value = sender
     }
 
+    fun startCloudSync(pin: String) {
+        viewModelScope.launch {
+            try {
+                repository.startCloudSync(pin)
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Mulai cloud sync gagal", e)
+            }
+        }
+    }
+
+    fun stopCloudSync() {
+        repository.stopCloudSync()
+    }
+
     fun sendMessage(text: String) {
         if (text.isBlank()) return
         val currentSender = _activeSender.value
         viewModelScope.launch {
-            _isAiThinking.value = true
             try {
                 repository.sendMessage(currentSender, text.trim())
             } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                _isAiThinking.value = false
+                Log.w("MainViewModel", "Operasi gagal", e)
+            }
+        }
+    }
+
+    fun deleteChatMessage(messageId: Long) {
+        viewModelScope.launch {
+            try {
+                repository.deleteChatMessage(messageId)
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Hapus pesan gagal", e)
             }
         }
     }
@@ -113,7 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 repository.askAiInChat(prompt.trim())
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("MainViewModel", "Operasi gagal", e)
             } finally {
                 _isAiThinking.value = false
             }
@@ -139,7 +161,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 try {
                     repository.addManualTransaction(trans)
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    Log.w("MainViewModel", "Operasi gagal", e)
                 }
         }
     }
@@ -150,7 +172,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 repository.deleteTransaction(transaction)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("MainViewModel", "Operasi gagal", e)
+            }
+        }
+    }
+
+    fun updateTransaction(transaction: FinancialTransaction) {
+        viewModelScope.launch {
+            try {
+                repository.updateTransaction(transaction)
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Operasi gagal", e)
             }
         }
     }
@@ -165,7 +197,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val report = repository.generateAuditReport(currentTrans, inc, exp)
                 _auditReport.value = report
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("MainViewModel", "Operasi gagal", e)
                 _auditReport.value = "Gagal memuat laporan, silakan coba lagi."
             } finally {
                 _isAuditLoading.value = false
@@ -183,7 +215,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 repository.clearAllData()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("MainViewModel", "Operasi gagal", e)
             }
         }
     }

@@ -1,5 +1,3 @@
-import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
-
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -10,18 +8,17 @@ plugins {
 }
 
 android {
-  namespace = "com.example"
+  namespace = "com.ngodingsendiri.moneychat"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.couplefinance.kxmpzq"
+    applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
-    versionName = "1.0.1"
+    versionCode = 3
+    versionName = "1.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + (System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "YOUR_CLIENT_ID_HERE") + "\"")
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
   }
 
@@ -43,7 +40,8 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
@@ -69,8 +67,6 @@ secrets {
   ignoreList.add("OPENROUTER_API_KEY")
 }
 
-googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.WARN }
-
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
@@ -87,22 +83,16 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  implementation(libs.converter.moshi)
-  implementation(libs.firebase.ai)
+  implementation(libs.androidx.security.crypto)
   implementation(libs.firebase.firestore)
-
-  // Firebase Auth
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
-  implementation(libs.androidx.credentials.play.services)
-  implementation(libs.googleid)
-  implementation(libs.firebase.appcheck.recaptcha)
+  implementation(libs.androidx.credentials.play.services.auth)
+  implementation(libs.play.services.auth)
+  implementation(libs.kotlinx.coroutines.play.services)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
-  implementation(libs.logging.interceptor)
-  implementation(libs.moshi.kotlin)
   implementation(libs.okhttp)
-  implementation(libs.retrofit)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
@@ -120,5 +110,4 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.test.manifest)
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
-  "ksp"(libs.moshi.kotlin.codegen)
 }

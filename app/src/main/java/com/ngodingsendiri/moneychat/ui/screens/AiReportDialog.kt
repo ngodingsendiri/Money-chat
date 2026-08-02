@@ -1,4 +1,4 @@
-package com.example.ui.screens
+package com.ngodingsendiri.moneychat.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,13 +33,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.example.ui.theme.AiPurple
-import com.example.ui.theme.AiPurpleLight
+import com.ngodingsendiri.moneychat.R
+import com.ngodingsendiri.moneychat.ui.theme.AiPurple
+import com.ngodingsendiri.moneychat.ui.theme.AiPurpleLight
 
 @Composable
 fun AiReportDialog(
@@ -86,7 +88,7 @@ fun AiReportDialog(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "Laporan Evaluasi Keuangan AI",
+                            text = stringResource(R.string.report_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = AiPurple
@@ -94,7 +96,7 @@ fun AiReportDialog(
                     }
 
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Rounded.Close, contentDescription = "Tutup")
+                        Icon(imageVector = Icons.Rounded.Close, contentDescription = stringResource(R.string.report_close_desc))
                     }
                 }
 
@@ -132,7 +134,7 @@ fun AiReportDialog(
                         .testTag("close_ai_report_button"),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Tutup Laporan")
+                    Text(stringResource(R.string.report_close))
                 }
             }
         }

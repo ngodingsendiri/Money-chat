@@ -1,4 +1,4 @@
-package com.example.data.local
+package com.ngodingsendiri.moneychat.data.local
 
 import androidx.room.Dao
 import androidx.room.Delete
@@ -21,6 +21,12 @@ interface TransactionDao {
 
     @Delete
     suspend fun deleteTransaction(transaction: FinancialTransaction)
+
+    @Query("SELECT * FROM financial_transactions WHERE cloudId = :cloudId LIMIT 1")
+    suspend fun getByCloudId(cloudId: String): FinancialTransaction?
+
+    @Query("DELETE FROM financial_transactions WHERE cloudId = :cloudId")
+    suspend fun deleteByCloudId(cloudId: String)
 
     @Query("DELETE FROM financial_transactions")
     suspend fun deleteAllTransactions()

@@ -1,5 +1,7 @@
-package com.example.ui.screens
+package com.ngodingsendiri.moneychat.ui.screens
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -60,18 +62,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.local.FinancialTransaction
-import com.example.ui.theme.AiPurple
-import com.example.ui.theme.AiPurpleLight
-import com.example.ui.theme.ExpenseRed
-import com.example.ui.theme.ExpenseRedLight
-import com.example.ui.theme.HusbandBlue
-import com.example.ui.theme.IncomeGreen
-import com.example.ui.theme.IncomeGreenLight
-import com.example.ui.theme.WifePink
+import com.ngodingsendiri.moneychat.R
+import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
+import com.ngodingsendiri.moneychat.ui.theme.AiPurple
+import com.ngodingsendiri.moneychat.ui.theme.AiPurpleLight
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
+import com.ngodingsendiri.moneychat.ui.theme.HusbandBlue
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
+import com.ngodingsendiri.moneychat.ui.theme.WifePink
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -174,13 +178,13 @@ fun RekapScreen(
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
-                                        text = "Analisis AI Finansial",
+                                        text = stringResource(R.string.rekap_ai_title),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
                                     Text(
-                                        text = "Dapatkan rekomendasi alokasi kas & hemat anggaran",
+                                        text = stringResource(R.string.rekap_ai_subtitle),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -203,7 +207,7 @@ fun RekapScreen(
                                         strokeWidth = 2.dp
                                     )
                                 } else {
-                                    Text("Evaluasi", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.rekap_ai_action), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -220,7 +224,7 @@ fun RekapScreen(
                             modifier = Modifier.padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = "📊 Alokasi Pengeluaran",
+                                text = stringResource(R.string.rekap_category_header),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -277,7 +281,7 @@ fun RekapScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "📝 Riwayat Transaksi",
+                            text = stringResource(R.string.rekap_history_header),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
@@ -291,7 +295,7 @@ fun RekapScreen(
                         ) {
                             Icon(imageVector = Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Tambah", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            Text(stringResource(R.string.rekap_add), fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
@@ -310,18 +314,28 @@ fun RekapScreen(
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
                             val filterOptions = listOf(
-                                0 to "Semua",
-                                1 to "Pengeluaran",
-                                2 to "Pemasukan"
+                                0 to stringResource(R.string.filter_all),
+                                1 to stringResource(R.string.filter_expense),
+                                2 to stringResource(R.string.filter_income)
                             )
 
                             filterOptions.forEach { (index, label) ->
                                 val isSelected = selectedFilterTab == index
+                                val segBg by animateColorAsState(
+                                    targetValue = if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent,
+                                    animationSpec = tween(220),
+                                    label = "segBg"
+                                )
+                                val segText by animateColorAsState(
+                                    targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    animationSpec = tween(220),
+                                    label = "segText"
+                                )
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .clip(RoundedCornerShape(8.dp))
-                                        .background(if (isSelected) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                        .background(segBg)
                                         .clickable { selectedFilterTab = index }
                                         .padding(vertical = 8.dp),
                                     contentAlignment = Alignment.Center
@@ -330,7 +344,7 @@ fun RekapScreen(
                                         text = label,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = segText
                                     )
                                 }
                             }
@@ -364,14 +378,14 @@ fun RekapScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Belum Ada Transaksi",
+                                text = stringResource(R.string.rekap_empty_title),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Kirim pesan obrolan atau klik 'Tambah' untuk mencatat transaksi finansial.",
+                                text = stringResource(R.string.rekap_empty_hint),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -400,7 +414,7 @@ fun RekapScreen(
                 .padding(20.dp)
                 .testTag("fab_add_transaction")
         ) {
-            Icon(imageVector = Icons.Rounded.Add, contentDescription = "Tambah Transaksi")
+            Icon(imageVector = Icons.Rounded.Add, contentDescription = stringResource(R.string.rekap_fab_desc))
         }
     }
 }
@@ -447,7 +461,7 @@ fun BalanceBannerCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Total Saldo",
+                        text = stringResource(R.string.balance_title),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Medium
@@ -466,7 +480,7 @@ fun BalanceBannerCard(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Tersimpan Lokal",
+                        text = stringResource(R.string.balance_local),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                         fontWeight = FontWeight.Medium
@@ -500,7 +514,7 @@ fun BalanceBannerCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Pemasukan",
+                            text = stringResource(R.string.income_label),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
@@ -529,7 +543,7 @@ fun BalanceBannerCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "Pengeluaran",
+                            text = stringResource(R.string.expense_label),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
@@ -654,12 +668,12 @@ fun TransactionItemCard(
     val amountPrefix = if (isIncome) "+ " else "- "
 
     val loggedByTag = when (transaction.loggedBy) {
-        "Bendahara" -> "💳 Bendahara"
-        "Anggota" -> "👤 Anggota"
-        "Ketua" -> "👑 Ketua"
-        "ISTRI" -> "👩 Istri"
-        "SUAMI" -> "👨 Suami"
-        else -> "👤 ${transaction.loggedBy}"
+        "Bendahara" -> stringResource(R.string.tag_bendahara)
+        "Anggota" -> stringResource(R.string.tag_anggota)
+        "Ketua" -> stringResource(R.string.tag_ketua)
+        "ISTRI" -> stringResource(R.string.tag_istri)
+        "SUAMI" -> stringResource(R.string.tag_suami)
+        else -> stringResource(R.string.tag_other, transaction.loggedBy)
     }
 
     Card(
@@ -753,10 +767,10 @@ fun TransactionItemCard(
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
-                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
-                        contentDescription = "Hapus",
+                        contentDescription = stringResource(R.string.action_delete),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
                         modifier = Modifier.size(18.dp)
                     )
@@ -823,12 +837,12 @@ fun DonutChart(
         // Inner text
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                text = "Total",
+                text = stringResource(R.string.donut_total),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Pengeluaran",
+                text = stringResource(R.string.donut_expense),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
