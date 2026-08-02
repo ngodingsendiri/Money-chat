@@ -8,7 +8,10 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -32,6 +35,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,6 +57,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,13 +96,23 @@ class MainActivity : ComponentActivity() {
                 var selectedTab by remember { mutableIntStateOf(0) }
                 var showAddDialog by remember { mutableStateOf(false) }
                 var showSettingsMenu by remember { mutableStateOf(false) }
+                var showGeminiKeyDialog by remember { mutableStateOf(false) }
+                var showOpenRouterKeyDialog by remember { mutableStateOf(false) }
 
                 var workspacePin by remember { mutableStateOf(prefs.getString("workspace_pin", null)) }
                 var userName by remember { mutableStateOf(prefs.getString("user_name", null)) }
+                var geminiKey by remember { mutableStateOf(prefs.getString("gemini_api_key", null)) }
+                var openRouterKey by remember { mutableStateOf(prefs.getString("openrouter_api_key", null)) }
 
                 LaunchedEffect(workspacePin, userName) {
                     workspacePin?.let { com.example.data.remote.FirestoreSyncManager.setWorkspaceId(it) }
                     userName?.let { viewModel.setSender(it) }
+                }
+                LaunchedEffect(geminiKey) {
+                    com.example.data.local.remote.GeminiService.userApiKey = geminiKey
+                }
+                LaunchedEffect(openRouterKey) {
+                    com.example.data.remote.OpenRouterService.userApiKey = openRouterKey
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -158,6 +177,32 @@ class MainActivity : ComponentActivity() {
                                                     }
                                                 )
                                                 DropdownMenuItem(
+                                                    text = { Text("Kunci Gemini API") },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        showGeminiKeyDialog = true
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Key,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Kunci OpenRouter API") },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        showOpenRouterKeyDialog = true
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Route,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
                                                     text = { Text("Hapus Semua Data") },
                                                     onClick = { 
                                                         viewModel.clearAllData()
@@ -176,6 +221,8 @@ class MainActivity : ComponentActivity() {
                                                         prefs.edit().clear().apply()
                                                         workspacePin = null
                                                         userName = null
+                                                        geminiKey = null
+                                                        openRouterKey = null
                                                         showSettingsMenu = false
                                                     },
                                                     leadingIcon = {
@@ -263,6 +310,34 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
+                            if (showGeminiKeyDialog) {
+                                ApiKeyDialog(
+                                    title = "Kunci Gemini API",
+                                    hint = "Masukkan API key Gemini milik akun Google-mu (bikin gratis di aistudio.google.com/apikey). Key dipakai langsung dari perangkatmu — server tidak perlu menyediakan API key.",
+                                    initialKey = geminiKey ?: "",
+                                    onDismiss = { showGeminiKeyDialog = false },
+                                    onSave = { newKey ->
+                                        prefs.edit().putString("gemini_api_key", newKey).apply()
+                                        geminiKey = newKey
+                                        showGeminiKeyDialog = false
+                                    }
+                                )
+                            }
+
+                            if (showOpenRouterKeyDialog) {
+                                ApiKeyDialog(
+                                    title = "Kunci OpenRouter API",
+                                    hint = "Masukkan API key OpenRouter-mu (bikin gratis di openrouter.ai/keys). Aplikasi otomatis memakai model GRATIS OpenRouter dan pindah ke model gratis lain kalau satu kena rate limit. Key tersimpan lokal di perangkat — server tidak menyediakan API key.",
+                                    initialKey = openRouterKey ?: "",
+                                    onDismiss = { showOpenRouterKeyDialog = false },
+                                    onSave = { newKey ->
+                                        prefs.edit().putString("openrouter_api_key", newKey).apply()
+                                        openRouterKey = newKey
+                                        showOpenRouterKeyDialog = false
+                                    }
+                                )
+                            }
+
                             auditReport?.let { report ->
                                 AiReportDialog(
                                     reportText = report,
@@ -315,4 +390,49 @@ fun GlowingBackground() {
                 .blur(80.dp)
         )
     }
+}
+
+@Composable
+fun ApiKeyDialog(
+    title: String,
+    hint: String,
+    initialKey: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var key by remember { mutableStateOf(initialKey) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(
+                    text = hint,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+                OutlinedTextField(
+                    value = key,
+                    onValueChange = { key = it },
+                    label = { Text("API Key") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(key.trim()) },
+                enabled = key.isNotBlank()
+            ) {
+                Text("Simpan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
 }

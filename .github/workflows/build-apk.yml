@@ -1,0 +1,74 @@
+name: Build APK
+
+# Menghasilkan APK Money Chat v1 dari GitHub.
+# - APK debug (langsung bisa diinstall) selalu dibuat.
+# - APK release (ditandatangani) otomatis dibuat kalau secrets keystore disiapkan:
+#     KEYSTORE_BASE64    -> isi file keystore (.jks) dalam base64
+#     KEYSTORE_PASSWORD  -> STORE_PASSWORD (password keystore)
+#     KEY_PASSWORD       -> password key (alias "upload")
+# Artifact bisa diunduh dari tab Actions → workflow terbaru → Artifacts.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle (cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Accept Android SDK licenses
+        uses: android-actions/setup-android@v3
+
+      - name: Generate debug keystore
+        # app/build.gradle.kts menandatangani build debug dengan ${rootDir}/debug.keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoneyChat-v1.0.0-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Build signed release APK
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Upload release APK
+        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MoneyChat-v1.0.0-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error

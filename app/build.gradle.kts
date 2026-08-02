@@ -18,7 +18,7 @@ android {
     minSdk = 24
     targetSdk = 36
     versionCode = 1
-    versionName = "1.0"
+    versionName = "1.0.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"" + (System.getenv("GOOGLE_WEB_CLIENT_ID") ?: "YOUR_CLIENT_ID_HERE") + "\"")
@@ -42,7 +42,6 @@ android {
 
   buildTypes {
     release {
-      isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")

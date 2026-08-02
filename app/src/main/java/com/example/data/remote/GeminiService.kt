@@ -3,6 +3,7 @@ package com.example.data.local.remote
 import com.example.BuildConfig
 import com.example.data.local.ChatMessage
 import com.example.data.local.FinancialTransaction
+import com.example.data.remote.OpenRouterService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -25,6 +26,16 @@ data class AiChatParseResult(
 
 object GeminiService {
 
+    /** API key Gemini milik pengguna (BYOK) — diisi lewat Pengaturan → "Kunci Gemini API".
+     *  Key ini disimpan lokal di perangkat dan dipakai langsung ke Google,
+     *  jadi aplikasi tidak perlu menyediakan API key dari server.
+     *  Kalau kosong, fallback ke BuildConfig.GEMINI_API_KEY (key bawaan app). */
+    @Volatile
+    var userApiKey: String? = null
+
+    private fun getApiKey(): String =
+        userApiKey?.takeIf { it.isNotBlank() } ?: BuildConfig.GEMINI_API_KEY
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -38,12 +49,25 @@ object GeminiService {
         sender: String,
         recentContext: List<ChatMessage>
     ): AiChatParseResult = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
+        val prompt = buildParsePrompt(messageText, sender)
 
-        // Try Gemini API call if key is available and non-empty
+        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+            try {
+                val text = OpenRouterService.completeChat(prompt)
+                if (text != null) {
+                    val parsed = parseJsonResponse(wrapOpenAiText(text), messageText, sender)
+                    if (parsed != null) return@withContext parsed
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2) Gemini API (BYOK atau key bawaan app)
+        val apiKey = getApiKey()
         if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
-                val prompt = buildParsePrompt(messageText, sender)
                 val jsonResponse = callGeminiApi(prompt, apiKey)
                 val parsed = parseJsonResponse(jsonResponse, messageText, sender)
                 if (parsed != null) {
@@ -54,7 +78,7 @@ object GeminiService {
             }
         }
 
-        // Fallback to Offline Heuristic Engine
+        // 3) Fallback to Offline Heuristic Engine
         return@withContext offlineHeuristicParse(messageText, sender)
     }
 
@@ -62,7 +86,7 @@ object GeminiService {
     suspend fun generateFrequentTransactionSuggestions(
         transactions: List<FinancialTransaction>
     ): List<String> = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
+        val apiKey = getApiKey()
         if (transactions.isEmpty()) {
             return@withContext listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
         }
@@ -88,6 +112,25 @@ object GeminiService {
             Jangan tambahkan penjelasan apa pun di luar JSON Array.
         """.trimIndent()
 
+        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+            try {
+                val text = OpenRouterService.completeChat(prompt)
+                if (!text.isNullOrBlank()) {
+                    val cleanedText = text.replace("```json", "").replace("```", "").trim()
+                    val jsonArray = JSONArray(cleanedText)
+                    val suggestions = mutableListOf<String>()
+                    for (i in 0 until jsonArray.length()) {
+                        suggestions.add(jsonArray.getString(i))
+                    }
+                    if (suggestions.isNotEmpty()) return@withContext suggestions
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2) Gemini API
         if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
                 val jsonResponse = callGeminiApi(prompt, apiKey)
@@ -106,7 +149,7 @@ object GeminiService {
             }
         }
 
-        // Fallback offline heuristic
+        // 3) Fallback offline heuristic
         val fallback = transactions.take(4).map { "${it.description} ${it.amount.toLong()}" }
         return@withContext fallback.ifEmpty { listOf("Makan siang 25000", "Bensin 20000", "Beli token listrik 50000") }
     }
@@ -116,7 +159,7 @@ object GeminiService {
         totalIncome: Double,
         totalExpense: Double
     ): String = withContext(Dispatchers.IO) {
-        val apiKey = BuildConfig.GEMINI_API_KEY
+        val apiKey = getApiKey()
         val balance = totalIncome - totalExpense
 
         val transSummary = transactions.take(20).joinToString("\n") {
@@ -147,6 +190,19 @@ object GeminiService {
             Gunakan nada bicara yang profesional, jelas, dan mengedukasi.
         """.trimIndent()
 
+        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+        if (OpenRouterService.userApiKey?.isNotBlank() == true) {
+            try {
+                val text = OpenRouterService.completeChat(prompt)
+                if (!text.isNullOrBlank()) {
+                    return@withContext text
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2) Gemini API
         if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
                 val jsonResponse = callGeminiApi(prompt, apiKey)
@@ -159,7 +215,7 @@ object GeminiService {
             }
         }
 
-        // Offline Fallback Report
+        // 3) Offline Fallback Report
         return@withContext """
             📌 **Evaluasi & Analisis Arus Kas**
             • **Arus Kas**: Total Pemasukan Rp ${totalIncome.toLong()} vs Pengeluaran Rp ${totalExpense.toLong()} (Sisa Saldo: Rp ${balance.toLong()}).
@@ -240,6 +296,12 @@ object GeminiService {
             }
             return response.body?.string() ?: ""
         }
+    }
+
+    /** Bungkus teks dari OpenAI/OpenRouter agar bisa diparse oleh parseJsonResponse. */
+    private fun wrapOpenAiText(text: String): String {
+        val quoted = JSONObject.quote(text)
+        return "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":$quoted}]}}]}"
     }
 
     private fun extractTextFromGeminiResponse(rawJson: String): String? {

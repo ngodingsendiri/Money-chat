@@ -1,0 +1,1382 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Money Chat — Web Preview</title>
+<style>
+  :root {
+    /* Light app scheme (mirrors ui/theme/Theme.kt LightColorScheme) */
+    --primary: #006C53;
+    --on-primary: #ffffff;
+    --primary-container: #85F8D2;
+    --on-primary-container: #002117;
+    --secondary: #4B635B;
+    --background: #FBFDF9;
+    --surface: #FBFDF9;
+    --surface-variant: #DBE5E0;
+    --on-surface: #191C1B;
+    --on-surface-variant: #3F4945;
+    --outline: #6F7975;
+    --tertiary: #AD7000;
+    /* Chat accents */
+    --indigo: #4F46E5;
+    --indigo-soft: #E0E7FF;
+    --ai-purple: #7C4DFF;
+    --ai-purple-light: #EFE6FF;
+    --ai-purple-dark-bubble: #331650;
+    --ai-purple-dark-text: #D0BCFF;
+    --income: #1B7A3D;
+    --income-bg: #D8F3DF;
+    --expense: #C62828;
+    --expense-bg: #FDE2E2;
+    --shadow: rgba(20, 40, 35, 0.16);
+    --frame: rgba(20, 40, 35, 0.35);
+    --chip-bg: #E9F3EF;
+  }
+
+  html.dark {
+    --primary: #A8C7FA;
+    --on-primary: #062E6F;
+    --primary-container: #0842A0;
+    --on-primary-container: #D3E3FD;
+    --secondary: #7FCFFF;
+    --background: #131314;
+    --surface: #1E1F20;
+    --surface-variant: #444746;
+    --on-surface: #E3E3E3;
+    --on-surface-variant: #C4C7C5;
+    --outline: #8E918F;
+    --tertiary: #82C993;
+    --indigo: #A8C7FA;
+    --indigo-soft: #1E2A47;
+    --ai-purple: #D0BCFF;
+    --ai-purple-light: #2A1E3F;
+    --ai-purple-dark-bubble: #331650;
+    --ai-purple-dark-text: #D0BCFF;
+    --income: #6FD08B;
+    --income-bg: #12301D;
+    --expense: #F2B8B5;
+    --expense-bg: #3A1614;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --frame: rgba(255, 255, 255, 0.14);
+    --chip-bg: #33373A;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    color: #E9F1EE;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(0, 108, 83, 0.35), transparent 60%),
+      radial-gradient(820px 500px at 95% 12%, rgba(124, 77, 255, 0.22), transparent 62%),
+      radial-gradient(760px 520px at 50% 115%, rgba(0, 152, 116, 0.25), transparent 60%),
+      #0A100E;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 34px 20px 56px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 26px; width: 100%; }
+
+  .hero { text-align: center; max-width: 600px; }
+  .hero .badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #7FE3BC; background: rgba(0, 108, 83, 0.28);
+    border: 1px solid rgba(127, 227, 188, 0.35);
+    padding: 6px 14px; border-radius: 999px; margin-bottom: 14px;
+    backdrop-filter: blur(6px);
+  }
+  .hero h1 {
+    font-size: clamp(26px, 5vw, 40px); font-weight: 800; letter-spacing: -0.03em;
+    background: linear-gradient(92deg, #E9F1EE 20%, #7FE3BC 55%, #B9A6FF 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { margin-top: 10px; color: #A9BFB7; font-size: 15px; line-height: 1.55; }
+  .hero p strong { color: #E9F1EE; font-weight: 600; }
+
+  .hint {
+    margin-top: 14px; font-size: 13px; color: #8FA69E;
+    background: rgba(10, 20, 17, 0.55); border: 1px solid rgba(127, 227, 188, 0.18);
+    padding: 8px 14px; border-radius: 12px; backdrop-filter: blur(4px);
+  }
+  .hint code { color: #7FE3BC; background: rgba(127, 227, 188, 0.12); padding: 1px 6px; border-radius: 6px; font-size: 12px; }
+
+  /* ---------- Phone frame ---------- */
+  .phone {
+    width: 400px; max-width: 100%;
+    aspect-ratio: 400 / 812;
+    border-radius: 44px;
+    background: #0B0F0E;
+    padding: 12px;
+    box-shadow:
+      0 40px 90px -20px rgba(0, 0, 0, 0.75),
+      0 0 0 1px var(--frame),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.04);
+    position: relative;
+  }
+  .phone::before {
+    content: ""; position: absolute; top: 26px; left: 50%; transform: translateX(-50%);
+    width: 110px; height: 24px; border-radius: 999px; background: #0B0F0E;
+    z-index: 40; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.05);
+  }
+  .screen {
+    width: 100%; height: 100%;
+    border-radius: 34px; overflow: hidden;
+    background: var(--background);
+    color: var(--on-surface);
+    display: flex; flex-direction: column;
+    position: relative;
+    transition: background 0.35s ease, color 0.35s ease;
+  }
+  .screen .glow { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+  .screen .glow i {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: 0.5;
+  }
+  .screen .glow i:nth-child(1) { width: 240px; height: 240px; left: -90px; top: -90px; background: radial-gradient(circle, var(--primary), transparent 65%); opacity: 0.22; }
+  .screen .glow i:nth-child(2) { width: 280px; height: 280px; right: -110px; bottom: -100px; background: radial-gradient(circle, #7C4DFF, transparent 65%); opacity: 0.14; }
+  .screen .glow i:nth-child(3) { width: 200px; height: 200px; right: -40px; top: 120px; background: radial-gradient(circle, var(--tertiary), transparent 65%); opacity: 0.12; }
+
+  .statusbar {
+    position: relative; z-index: 2;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 22px 8px; font-size: 12px; font-weight: 600; color: var(--on-surface);
+  }
+  .statusbar .icons { display: flex; gap: 5px; align-items: center; }
+  .statusbar .icons span { width: 14px; height: 8px; border-radius: 2px; background: currentColor; opacity: 0.85; }
+  .statusbar .icons span:nth-child(2) { width: 10px; opacity: 0.5; }
+  .statusbar .icons span:nth-child(3) { width: 6px; opacity: 0.3; }
+
+  /* ---------- Screens ---------- */
+  .screen-inner { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  .view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .view[hidden] { display: none; }
+
+  /* PIN connect */
+  .pin-view { align-items: center; justify-content: center; padding: 24px 26px; gap: 8px; text-align: center; }
+  .app-icon {
+    width: 84px; height: 84px; border-radius: 24px;
+    background: linear-gradient(145deg, var(--primary), #0E8F6C);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 14px 34px -10px rgba(0, 108, 83, 0.65), inset 0 0 0 1px rgba(255,255,255,0.2);
+    margin-bottom: 6px;
+  }
+  .app-icon svg { width: 46px; height: 46px; }
+  .pin-view h2 { font-size: 22px; font-weight: 800; color: var(--on-surface); }
+  .pin-view .sub { font-size: 13px; color: var(--on-surface-variant); line-height: 1.5; max-width: 260px; margin-bottom: 18px; }
+
+  .field {
+    width: 100%; display: flex; flex-direction: column; gap: 6px; text-align: left; margin-bottom: 12px;
+  }
+  .field label { font-size: 12px; font-weight: 600; color: var(--on-surface-variant); letter-spacing: 0.02em; }
+  .field input, .field select {
+    width: 100%; padding: 13px 15px; border-radius: 14px;
+    border: 1.5px solid var(--outline); background: var(--surface); color: var(--on-surface);
+    font-size: 15px; font-family: inherit; transition: border-color 0.2s, box-shadow 0.2s;
+    appearance: none;
+  }
+  .field select {
+    background-image: linear-gradient(45deg, transparent 50%, var(--on-surface-variant) 50%), linear-gradient(135deg, var(--on-surface-variant) 50%, transparent 50%);
+    background-position: calc(100% - 20px) 55%, calc(100% - 15px) 55%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+  .field input::placeholder { color: var(--on-surface-variant); opacity: 0.55; }
+
+  .btn {
+    width: 100%; padding: 13px; border-radius: 14px; border: none; cursor: pointer;
+    background: var(--primary); color: var(--on-primary); font-size: 15px; font-weight: 700; font-family: inherit;
+    transition: transform 0.15s, filter 0.2s, box-shadow 0.2s;
+    box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--primary) 70%, transparent);
+  }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { transform: scale(0.97); }
+  .btn.secondary { background: var(--surface-variant); color: var(--on-surface); box-shadow: none; }
+
+  .pin-note { font-size: 11px; color: var(--on-surface-variant); opacity: 0.8; margin-top: 6px; }
+
+  /* Top bar */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 10px 20px;
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid color-mix(in srgb, var(--outline) 18%, transparent);
+  }
+  .topbar .titles { display: flex; flex-direction: column; }
+  .topbar .titles strong { font-size: 15.5px; font-weight: 800; color: var(--on-surface); }
+  .topbar .titles span { font-size: 10.5px; color: var(--on-surface-variant); }
+  .ai-chip {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 3px;
+    font-size: 10px; font-weight: 700; color: var(--on-surface-variant);
+  }
+  .ai-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--on-surface-variant); opacity: 0.55; transition: all 0.25s; }
+  .ai-chip.on { color: var(--income); }
+  .ai-chip.on::before { background: var(--income); opacity: 1; box-shadow: 0 0 0 3px color-mix(in srgb, var(--income) 25%, transparent); }
+
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: none; background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: var(--on-surface);
+    transition: background 0.2s;
+  }
+  .icon-btn:hover { background: var(--surface-variant); }
+  .menu-wrap { position: relative; }
+  .menu {
+    position: absolute; right: 6px; top: 44px; min-width: 200px; z-index: 50;
+    background: var(--surface); border: 1px solid var(--outline); border-radius: 14px;
+    box-shadow: 0 18px 44px -12px var(--shadow); overflow: hidden; padding: 6px;
+    animation: pop 0.16s ease;
+  }
+  .menu[hidden] { display: none; }
+  @keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(0.97); } to { opacity: 1; transform: none; } }
+  .menu button {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border: none; background: transparent; cursor: pointer; border-radius: 10px;
+    font-size: 13px; font-family: inherit; color: var(--on-surface); text-align: left;
+  }
+  .menu button:hover { background: var(--surface-variant); }
+  .menu button.danger { color: var(--expense); }
+  .menu button .menu-sub { display: block; font-size: 10px; color: var(--on-surface-variant); opacity: 0.8; }
+  .menu button svg { width: 17px; height: 17px; flex-shrink: 0; }
+
+  /* Content */
+  .content { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+  /* Chat */
+  .sender-row { display: flex; gap: 8px; padding: 10px 14px 8px; overflow-x: auto; flex-shrink: 0; scrollbar-width: none; }
+  .sender-row::-webkit-scrollbar { display: none; }
+  .chip {
+    padding: 7px 13px; border-radius: 999px; border: 1px solid var(--outline);
+    background: var(--chip-bg); color: var(--on-surface-variant); font-size: 12.5px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: inherit; transition: all 0.18s;
+  }
+  .chip:hover { border-color: var(--primary); }
+  .chip.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+
+  .msg-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
+  .msg-list::-webkit-scrollbar { width: 4px; }
+  .msg-list::-webkit-scrollbar-thumb { background: var(--outline); border-radius: 4px; }
+
+  .msg { display: flex; flex-direction: column; max-width: 84%; animation: rise 0.28s ease; }
+  .msg.me { align-self: flex-end; align-items: flex-end; }
+  .msg.other, .msg.ai { align-self: flex-start; align-items: flex-start; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .msg .meta { display: flex; gap: 6px; align-items: center; padding: 0 6px 3px; }
+  .msg .meta b { font-size: 11px; font-weight: 700; color: var(--on-surface-variant); }
+  .msg.me .meta b { color: var(--indigo); }
+  .msg.ai .meta b { color: var(--ai-purple); }
+  .msg .meta time { font-size: 9.5px; color: var(--on-surface-variant); opacity: 0.75; }
+  .ava {
+    width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; color: var(--on-surface);
+    background: var(--surface-variant); border: 1px solid var(--outline);
+  }
+  .ava.ai { background: var(--ai-purple); color: #fff; border-color: transparent; }
+
+  .bubble {
+    padding: 9px 13px; border-radius: 18px; font-size: 13.5px; line-height: 1.45;
+    box-shadow: 0 2px 8px -3px var(--shadow);
+  }
+  .msg.me .bubble {
+    background: var(--indigo); color: #fff;
+    border-bottom-right-radius: 5px;
+  }
+  .msg.other .bubble { background: var(--surface-variant); color: var(--on-surface); border-bottom-left-radius: 5px; }
+  .msg.ai .bubble {
+    background: var(--ai-purple-light); color: var(--on-surface);
+    border: 1px solid color-mix(in srgb, var(--ai-purple) 35%, transparent);
+    border-bottom-left-radius: 5px;
+  }
+  .bubble .tag {
+    margin-top: 7px; display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 10px; font-size: 11.5px; font-weight: 700;
+  }
+  .bubble .tag.in { background: var(--income-bg); color: var(--income); }
+  .bubble .tag.out { background: var(--expense-bg); color: var(--expense); }
+  .bubble .tag svg { width: 13px; height: 13px; }
+
+  .typing { display: inline-flex; gap: 4px; align-items: center; padding: 12px 15px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ai-purple); opacity: 0.6; animation: blink 1.1s infinite; }
+  .typing i:nth-child(2) { animation-delay: 0.18s; }
+  .typing i:nth-child(3) { animation-delay: 0.36s; }
+  @keyframes blink { 0%, 70%, 100% { transform: translateY(0); opacity: 0.4; } 35% { transform: translateY(-4px); opacity: 1; } }
+
+  /* Quick suggestions + input */
+  .composer { flex-shrink: 0; padding: 6px 12px 12px; display: flex; flex-direction: column; gap: 8px; background: linear-gradient(to top, var(--background) 75%, transparent); }
+  .suggests { display: flex; gap: 7px; overflow-x: auto; padding: 0 2px; scrollbar-width: none; }
+  .suggests::-webkit-scrollbar { display: none; }
+  .suggests button {
+    flex-shrink: 0; padding: 7px 12px; border-radius: 14px; font-size: 12px; font-family: inherit;
+    border: 1px solid var(--outline); background: var(--chip-bg); color: var(--on-surface);
+    cursor: pointer; transition: transform 0.15s, border-color 0.2s;
+  }
+  .suggests button:hover { border-color: var(--primary); transform: translateY(-1px); }
+  .input-bar { display: flex; gap: 9px; align-items: flex-end; }
+  .input-bar input {
+    flex: 1; padding: 12px 15px; border-radius: 22px; border: 1.5px solid var(--outline);
+    background: var(--surface); color: var(--on-surface); font-size: 14px; font-family: inherit;
+  }
+  .input-bar input:focus { outline: none; border-color: var(--primary); }
+  .send-btn {
+    width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0;
+    background: var(--indigo); color: #fff; display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s, filter 0.2s, background 0.2s;
+    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--indigo) 70%, transparent);
+  }
+  .send-btn:hover { filter: brightness(1.1); }
+  .send-btn:active { transform: scale(0.92); }
+  .send-btn:disabled { background: var(--surface-variant); color: var(--on-surface-variant); box-shadow: none; cursor: default; }
+  .send-btn svg { width: 19px; height: 19px; }
+
+  /* Rekap */
+  .rekap-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card {
+    border-radius: 18px; padding: 13px 14px;
+    background: var(--surface); border: 1px solid color-mix(in srgb, var(--outline) 30%, transparent);
+    box-shadow: 0 6px 18px -10px var(--shadow);
+  }
+  .card.full { grid-column: 1 / -1; background: linear-gradient(140deg, var(--primary-container), color-mix(in srgb, var(--primary-container) 55%, var(--surface))); }
+  .card.full .label { color: var(--on-primary-container); }
+  .card.full .amount { color: var(--on-primary-container); font-size: 24px; }
+  .card .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--on-surface-variant); }
+  .card .amount { font-size: 19px; font-weight: 800; margin-top: 4px; color: var(--on-surface); }
+  .card .amount.in { color: var(--income); }
+  .card .amount.out { color: var(--expense); }
+
+  .rekap-head { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; gap: 8px; flex-wrap: wrap; }
+  .rekap-head h3 { font-size: 14px; font-weight: 800; color: var(--on-surface); }
+  .rekap-actions { display: flex; gap: 8px; align-items: center; }
+  .add-btn {
+    padding: 9px 13px; border-radius: 999px; border: 1px solid var(--outline);
+    background: var(--surface); color: var(--primary); font-size: 12px; font-weight: 700; font-family: inherit;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.18s;
+  }
+  .add-btn:hover { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+  .add-btn svg { width: 14px; height: 14px; }
+  .audit-btn {
+    padding: 9px 14px; border-radius: 999px; border: none; cursor: pointer; font-size: 12px; font-weight: 700; font-family: inherit;
+    background: var(--ai-purple); color: #fff; display: inline-flex; align-items: center; gap: 7px;
+    transition: transform 0.15s, filter 0.2s; box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--ai-purple) 70%, transparent);
+  }
+  .audit-btn:hover { filter: brightness(1.1); }
+  .audit-btn:active { transform: scale(0.96); }
+  .audit-btn:disabled { opacity: 0.6; cursor: default; }
+  .audit-btn svg { width: 15px; height: 15px; }
+  .audit-btn .spin { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .tx-list { display: flex; flex-direction: column; gap: 8px; }
+  .tx {
+    display: flex; align-items: center; gap: 11px;
+    padding: 11px 12px; border-radius: 15px;
+    background: var(--surface); border: 1px solid color-mix(in srgb, var(--outline) 26%, transparent);
+    animation: rise 0.25s ease;
+  }
+  .tx .cat {
+    width: 38px; height: 38px; border-radius: 12px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+  }
+  .tx .cat.in { background: var(--income-bg); }
+  .tx .cat.out { background: var(--expense-bg); }
+  .tx .body { flex: 1; min-width: 0; }
+  .tx .body .desc { font-size: 13px; font-weight: 600; color: var(--on-surface); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx .body .sub { font-size: 11px; color: var(--on-surface-variant); margin-top: 1px; }
+  .tx .amt { font-size: 13.5px; font-weight: 800; }
+  .tx .amt.in { color: var(--income); }
+  .tx .amt.out { color: var(--expense); }
+  .tx .del {
+    width: 28px; height: 28px; border-radius: 50%; border: none; background: transparent; cursor: pointer;
+    color: var(--on-surface-variant); display: flex; align-items: center; justify-content: center; opacity: 0.7;
+    transition: opacity 0.2s, background 0.2s, color 0.2s;
+  }
+  .tx .del:hover { opacity: 1; background: var(--expense-bg); color: var(--expense); }
+  .tx .del svg { width: 15px; height: 15px; }
+  .empty { text-align: center; color: var(--on-surface-variant); font-size: 13px; padding: 26px 0; opacity: 0.85; }
+
+  /* Bottom nav */
+  .bottombar {
+    display: flex; border-top: 1px solid color-mix(in srgb, var(--outline) 20%, transparent);
+    background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(8px);
+  }
+  .bottombar button {
+    flex: 1; padding: 9px 0 10px; border: none; background: transparent; cursor: pointer; font-family: inherit;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    color: var(--on-surface-variant); font-size: 10.5px; font-weight: 600;
+    transition: color 0.2s;
+  }
+  .bottombar button.active { color: var(--primary); }
+  .bottombar button svg { width: 21px; height: 21px; }
+  .bottombar button .dot { width: 4px; height: 4px; border-radius: 50%; background: var(--primary); opacity: 0; transition: opacity 0.2s; }
+  .bottombar button.active .dot { opacity: 1; }
+
+  /* Toast */
+  .toast {
+    position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%) translateY(12px);
+    background: var(--on-surface); color: var(--surface);
+    font-size: 12.5px; font-weight: 600; padding: 9px 16px; border-radius: 999px;
+    opacity: 0; pointer-events: none; z-index: 60; transition: all 0.28s ease;
+    box-shadow: 0 12px 30px -10px var(--shadow); white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Modals */
+  .modal-overlay {
+    position: absolute; inset: 0; z-index: 70; display: flex; align-items: flex-end; justify-content: center;
+    background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(3px); animation: fade 0.2s ease;
+  }
+  .modal-overlay[hidden] { display: none; }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .modal {
+    width: 100%; background: var(--surface); border-radius: 26px 26px 0 0;
+    padding: 20px 20px 18px; max-height: 72%; overflow-y: auto; animation: sheet 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+    border: 1px solid color-mix(in srgb, var(--outline) 30%, transparent);
+  }
+  @keyframes sheet { from { transform: translateY(60px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .modal .m-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .modal .m-head h3 { font-size: 16px; font-weight: 800; color: var(--on-surface); display: flex; align-items: center; gap: 8px; }
+  .modal .m-head h3 svg { width: 19px; height: 19px; color: var(--ai-purple); }
+  .modal .report { font-size: 13px; line-height: 1.6; color: var(--on-surface); white-space: pre-wrap; }
+  .modal .report b { font-weight: 800; }
+  .key-hint { font-size: 12px; line-height: 1.55; color: var(--on-surface-variant); margin-bottom: 14px; }
+  .key-hint b { color: var(--on-surface); }
+  .key-status {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 12px;
+    font-size: 11.5px; font-weight: 700; color: var(--income);
+    background: var(--income-bg); border-radius: 10px; padding: 8px 11px;
+  }
+  .key-status.off { color: var(--on-surface-variant); background: var(--surface-variant); }
+  .key-status::before { content: "●"; font-size: 9px; }
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .modal-actions .btn { width: auto; padding: 11px 18px; font-size: 13.5px; }
+
+  .seg { display: flex; background: var(--surface-variant); border-radius: 14px; padding: 4px; margin-bottom: 12px; }
+  .seg-btn {
+    flex: 1; padding: 9px; border: none; background: transparent; border-radius: 10px; font-family: inherit;
+    font-size: 13px; font-weight: 700; color: var(--on-surface-variant); cursor: pointer; transition: all 0.18s;
+  }
+  .seg-btn.active { background: var(--surface); color: var(--on-surface); box-shadow: 0 2px 8px -3px var(--shadow); }
+
+  .foot { text-align: center; font-size: 12.5px; color: #8FA69E; max-width: 480px; line-height: 1.6; }
+  .foot code { color: #7FE3BC; }
+
+  @media (max-width: 460px) {
+    body { padding: 20px 10px 40px; }
+    .phone { padding: 9px; border-radius: 38px; }
+    .screen { border-radius: 30px; }
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <header class="hero">
+      <span class="badge">● Web preview — mockup interaktif</span>
+      <h1>Money Chat</h1>
+      <p>
+        Browser showcase untuk aplikasi Android <strong>Money Chat</strong> —
+        chat keuangan grup &amp; keluarga dengan AI untuk mencatat transaksi otomatis.
+        Buka <strong>Pengaturan → Kunci API</strong> lalu tempel key pribadimu —
+        <strong>OpenRouter</strong> (model gratis + rotasi otomatis kalau satu kena rate limit)
+        atau <strong>Gemini</strong> (jatah akun Google-mu sendiri) — tanpa server API key.
+      </p>
+      <div class="hint">💡 Coba ketik: <code>beli kopi 20rb</code> · <code>bayar listrik 250 ribu</code> · <code>gaji cair 2 juta</code></div>
+    </header>
+
+    <div class="phone" id="phone">
+      <div class="screen" id="screen">
+        <div class="glow"><i></i><i></i><i></i></div>
+        <div class="statusbar">
+          <span id="clock">09:41</span>
+          <span class="icons"><span></span><span></span><span></span></span>
+        </div>
+
+        <!-- ===== PIN Connect ===== -->
+        <section class="screen-inner pin-view view" id="pinView">
+          <div class="app-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+            </svg>
+          </div>
+          <h2>Keuangan Bersama</h2>
+          <p class="sub">Hubungkan workspace dengan PIN unik untuk mulai mencatat keuangan bersama keluarga &amp; grup.</p>
+          <div class="field">
+            <label for="pinInput">PIN Workspace (bebas, min. 4 digit)</label>
+            <input id="pinInput" type="password" inputmode="numeric" placeholder="••••" maxlength="6" />
+          </div>
+          <div class="field">
+            <label for="nameInput">Nama Anda</label>
+            <input id="nameInput" type="text" placeholder="cth: Bendahara / Suami" maxlength="24" />
+          </div>
+          <button class="btn" id="connectBtn">Hubungkan ➜</button>
+          <p class="pin-note">Semua data tersimpan lokal di browser ini (demo).</p>
+        </section>
+
+        <!-- ===== Main app ===== -->
+        <section class="screen-inner view" id="mainView" hidden>
+          <header class="topbar">
+            <div class="titles">
+              <strong>Keuangan Bersama</strong>
+              <span>Pencatatan &amp; Analisis Finansial</span>
+              <span class="ai-chip" id="aiChip">AI: Offline</span>
+            </div>
+            <div class="menu-wrap">
+              <button class="icon-btn" id="menuBtn" title="Pengaturan" aria-label="Pengaturan">
+                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>
+              </button>
+              <div class="menu" id="menu" hidden>
+                <button id="themeBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+                  <span id="themeLabel">Mode Gelap</span>
+                </button>
+                <button id="keyBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                  <span>Kunci Gemini API <span class="menu-sub" id="keyMenuSub">Pakai jatah Gemini akun Google-mu</span></span>
+                </button>
+                <button id="orKeyBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h5a3 3 0 0 0 3-3V8a3 3 0 0 1 3-3h5"/><path d="M17 3l4 2-4 2"/><path d="M7 21l-4-2 4-2"/></svg>
+                  <span>Kunci OpenRouter API <span class="menu-sub" id="orKeyMenuSub">Model gratis + rotasi otomatis</span></span>
+                </button>
+                <button id="clearBtn" class="danger">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+                  Hapus Semua Data
+                </button>
+                <button id="logoutBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                  <span id="logoutLabel">Logout</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main class="content">
+            <!-- Chat -->
+            <div class="view" id="chatView">
+              <div class="sender-row" id="senderRow"></div>
+              <div class="msg-list" id="msgList"></div>
+              <div class="composer">
+                <div class="suggests" id="suggests"></div>
+                <div class="input-bar">
+                  <input id="msgInput" type="text" placeholder="Tulis pesan…" autocomplete="off" />
+                  <button class="send-btn" id="sendBtn" disabled aria-label="Kirim">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Rekap -->
+            <div class="view" id="rekapView" hidden>
+              <div class="rekap-scroll">
+                <div class="cards" id="cards"></div>
+                <div class="rekap-head">
+                  <h3>Riwayat Transaksi</h3>
+                  <div class="rekap-actions">
+                    <button class="add-btn" id="addBtn">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                      Tambah
+                    </button>
+                    <button class="audit-btn" id="auditBtn">
+                      <svg id="auditIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></svg>
+                      <span id="auditLabel">Laporan AI</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="tx-list" id="txList"></div>
+              </div>
+            </div>
+          </main>
+
+          <nav class="bottombar">
+            <button data-tab="chat" class="active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Diskusi <span class="dot"></span>
+            </button>
+            <button data-tab="rekap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.2 15.9A10 10 0 1 1 8 2.8"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              Rekap <span class="dot"></span>
+            </button>
+          </nav>
+        </section>
+
+        <div class="toast" id="toast"></div>
+
+        <!-- Audit report modal -->
+        <div class="modal-overlay" id="modalOverlay" hidden>
+          <div class="modal">
+            <div class="m-head">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></svg>
+                Laporan Audit AI
+              </h3>
+              <button class="icon-btn" id="modalClose" aria-label="Tutup">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="report" id="reportText"></div>
+          </div>
+        </div>
+
+        <!-- Gemini key modal -->
+        <div class="modal-overlay" id="keyModalOverlay" hidden>
+          <div class="modal">
+            <div class="m-head">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                Kunci Gemini API
+              </h3>
+              <button class="icon-btn" id="keyClose" aria-label="Tutup">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="key-status" id="keyStatus">Belum ada key — AI pakai mesin offline</div>
+            <p class="key-hint">
+              Ini konsep <b>Bring Your Own Key</b>: tiap akun Google bikin key Gemini
+              gratis sendiri di <b>aistudio.google.com/apikey</b>, lalu tempel di sini.
+              Key dipakai <b>langsung dari perangkat/browser ini</b> — aplikasi tidak
+              menyediakan API key dari server. Kosongkan untuk menghapus key.
+            </p>
+            <div class="field">
+              <label for="keyInput">API Key</label>
+              <input id="keyInput" type="password" placeholder="AIza…" autocomplete="off" />
+            </div>
+            <div class="modal-actions">
+              <button class="btn secondary" id="keyCancel">Batal</button>
+              <button class="btn" id="keySave">Simpan Key</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- OpenRouter key modal -->
+        <div class="modal-overlay" id="orKeyModalOverlay" hidden>
+          <div class="modal">
+            <div class="m-head">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19h5a3 3 0 0 0 3-3V8a3 3 0 0 1 3-3h5"/><path d="M17 3l4 2-4 2"/><path d="M7 21l-4-2 4-2"/></svg>
+                Kunci OpenRouter API
+              </h3>
+              <button class="icon-btn" id="orKeyClose" aria-label="Tutup">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="key-status" id="orKeyStatus">Belum ada key — AI pakai mesin offline</div>
+            <p class="key-hint">
+              Bikin key gratis di <b>openrouter.ai/keys</b> lalu tempel di sini.
+              Aplikasi memakai <b>model gratis</b> OpenRouter dan otomatis <b>pindah ke
+              model gratis lain</b> kalau satu kena rate limit (429) / kuota habis.
+              Key dipakai langsung dari perangkat ini — server tidak menyediakan API key.
+            </p>
+            <div class="field">
+              <label for="orKeyInput">API Key</label>
+              <input id="orKeyInput" type="password" placeholder="sk-or-v1-…" autocomplete="off" />
+            </div>
+            <div class="modal-actions">
+              <button class="btn secondary" id="orKeyCancel">Batal</button>
+              <button class="btn" id="orKeySave">Simpan Key</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual transaction modal -->
+        <div class="modal-overlay" id="addModalOverlay" hidden>
+          <div class="modal">
+            <div class="m-head">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                Tambah Transaksi
+              </h3>
+              <button class="icon-btn" id="addClose" aria-label="Tutup">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div class="seg" id="typeSeg">
+              <button class="seg-btn active" data-type="PENGELUARAN">Pengeluaran</button>
+              <button class="seg-btn" data-type="PEMASUKAN">Pemasukan</button>
+            </div>
+            <div class="field">
+              <label for="addCat">Kategori</label>
+              <select id="addCat"></select>
+            </div>
+            <div class="field">
+              <label for="addAmount">Nominal (Rp)</label>
+              <input id="addAmount" type="number" inputmode="numeric" placeholder="50000" min="1" />
+            </div>
+            <div class="field">
+              <label for="addDesc">Keterangan</label>
+              <input id="addDesc" type="text" placeholder="cth: Beli beras" maxlength="60" />
+            </div>
+            <div class="modal-actions">
+              <button class="btn secondary" id="addCancel">Batal</button>
+              <button class="btn" id="addSave">Simpan</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="foot">
+      Preview statis interaktif — bukan aplikasi Android yang berjalan. UI &amp; warna meniru aplikasi asli
+      (<code>com.example</code> / Jetpack Compose). Jalankan <code>npm run dev</code> untuk menyajikan halaman ini.
+    </p>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ============ Utilities ============ */
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtRp = (n) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+  const fmtTime = () => new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  const uid = () => Date.now() + "-" + Math.floor(Math.random() * 1e6);
+  const RAND_NAMES = ["Bendahara", "Anggota", "Ketua"]; // peran pengirim
+  const GEMINI_MODEL = "gemini-3.5-flash";
+  const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent";
+  /* Model gratis OpenRouter (divalidasi dari https://openrouter.ai/api/v1/models) */
+  const OR_FREE_MODELS = [
+    "inclusionai/ling-3.0-flash:free",
+    "openai/gpt-oss-20b:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "poolside/laguna-xs-2.1:free",
+    "openrouter/free",
+  ];
+  const OR_URL = "https://openrouter.ai/api/v1/chat/completions";
+  const CATEGORIES = [
+    "Groceries & Sembako", "Makanan & Minuman", "Tagihan & Utilitas", "Kebutuhan Anak",
+    "Transportasi", "Kesehatan & Skincare", "Hiburan & Belanja", "Gaji & Pemasukan",
+    "Kas & Iuran", "Lain-lain",
+  ];
+  const CAT_EMOJI = {
+    "Groceries & Sembako": "🛒", "Makanan & Minuman": "🍜", "Tagihan & Utilitas": "💡",
+    "Kebutuhan Anak": "🧸", "Transportasi": "⛽", "Kesehatan & Skincare": "💊",
+    "Hiburan & Belanja": "🛍️", "Gaji & Pemasukan": "💰", "Kas & Iuran": "🏦", "Lain-lain": "📦",
+  };
+  const AVATARS = { Bendahara: "B", Anggota: "A", Ketua: "K" };
+
+  /* ============ State ============ */
+  const LS_KEY = "money-chat-preview-v1";
+  let state = load();
+  function load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LS_KEY));
+      if (raw && typeof raw === "object") return raw;
+    } catch (_) {}
+    return {
+      pin: null,
+      name: null,
+      dark: false,
+      geminiKey: null,
+      openRouterKey: null,
+      sender: "Bendahara",
+      messages: [
+        { id: "m1", from: "other", name: "Ketua", text: "Halo semua! Ini grup keuangan keluarga ya 👨👩👧", time: "19:02", tag: null },
+        { id: "m2", from: "other", name: "Bendahara", text: "Uang kas Rp 500.000 dari Ketua sudah masuk ✅", time: "19:05", tag: { type: "PEMASUKAN", amount: 500000, category: "Kas & Iuran" } },
+        { id: "m3", from: "me", name: "Bendahara", text: "Tadi beli bensin 50.000 buat antar anak sekolah", time: "19:20", tag: { type: "PENGELUARAN", amount: 50000, category: "Transportasi" } },
+        { id: "m4", from: "ai", name: "AI", text: "Transaksi 'Tadi beli bensin 50.000 buat antar anak sekolah' sebesar Rp 50.000 telah dicatat otomatis. 🧾", time: "19:20", tag: null },
+      ],
+      transactions: [
+        { id: "t1", type: "PEMASUKAN", category: "Kas & Iuran", amount: 500000, description: "Uang kas dari Ketua", loggedBy: "Bendahara", time: "19:05" },
+        { id: "t2", type: "PENGELUARAN", category: "Transportasi", amount: 50000, description: "Bensin", loggedBy: "Bendahara", time: "19:20" },
+        { id: "t3", type: "PENGELUARAN", category: "Tagihan & Utilitas", amount: 250000, description: "Listrik bulan ini", loggedBy: "Ketua", time: "18:40" },
+      ],
+    };
+  }
+  function save() { localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+
+  /* ============ AI engine status ============ */
+  function renderAiChip() {
+    const chip = $("aiChip");
+    if (state.openRouterKey) {
+      chip.textContent = "AI: OpenRouter (model gratis)";
+      chip.classList.add("on");
+    } else if (state.geminiKey) {
+      chip.textContent = "AI: Gemini (key pribadi)";
+      chip.classList.add("on");
+    } else {
+      chip.textContent = "AI: Offline";
+      chip.classList.remove("on");
+    }
+    $("keyMenuSub").textContent = state.geminiKey ? "Key terpasang ✅" : "Pakai jatah Gemini akun Google-mu";
+    $("orKeyMenuSub").textContent = state.openRouterKey ? "Key terpasang ✅" : "Model gratis + rotasi otomatis";
+  }
+
+  /* ============ Real Gemini calls (BYOK) ============ */
+  async function callGemini(prompt) {
+    const key = state.geminiKey;
+    if (!key || key.trim() === "") return null;
+    try {
+      const res = await fetch(GEMINI_URL + "?key=" + encodeURIComponent(key.trim()), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2 },
+        }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      const text = data && data.candidates && data.candidates[0] && data.candidates[0].content &&
+        data.candidates[0].content.parts && data.candidates[0].content.parts[0] &&
+        data.candidates[0].content.parts[0].text;
+      return typeof text === "string" && text.trim() !== "" ? text : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function buildParsePrompt(text) {
+    return (
+      "Kamu adalah 'Asisten Money Chat' yang bertugas memantau obrolan transaksi finansial pada grup, lembaga, atau rumah tangga.\n" +
+      "\nPesan masuk dari " + state.sender + ': "' + text + '"\n' +
+      "\nAnalisis apakah pesan di atas mengandung catatan transaksi, pengeluaran, iuran, tagihan, atau pemasukan dana.\n" +
+      "\nPILIHAN KATEGORI VALID:\n" +
+      "- Groceries & Sembako\n- Makanan & Minuman\n- Tagihan & Utilitas\n- Kebutuhan Operasional\n- Transportasi\n" +
+      "- Kesehatan & Keselamatan\n- Hiburan & Acara\n- Lain-lain\n- Gaji & Pemasukan Kas\n" +
+      "\nKeluarkan jawaban HANYA berupa JSON valid dalam format persis seperti ini:\n" +
+      '{"containsTransaction": true, "type": "PENGELUARAN", "category": "Kebutuhan Operasional", "amount": 50000, ' +
+      '"description": "Beli kertas dan alat tulis", "aiReply": "Transaksi dicatat otomatis."}\n' +
+      "\nJika tidak mengandung transaksi keuangan, kirimkan:\n" +
+      '{"containsTransaction": false, "aiReply": "Catatan pesan tersimpan dalam ruang obrolan."}'
+    );
+  }
+
+  async function geminiParse(text) {
+    const raw = await callGemini(buildParsePrompt(text));
+    if (!raw) return null;
+    try {
+      const cleaned = raw.replace(/```json|```/g, "").trim();
+      const json = JSON.parse(cleaned);
+      if (json.containsTransaction) {
+        return {
+          financial: true,
+          type: json.type === "PEMASUKAN" ? "PEMASUKAN" : "PENGELUARAN",
+          category: json.category || "Lain-lain",
+          amount: Number(json.amount) || 0,
+          reply: json.aiReply || "Transaksi telah dicatat otomatis.",
+        };
+      }
+      return { financial: false, reply: json.aiReply || "Catatan pesan tersimpan dalam ruang obrolan." };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function buildAuditPrompt() {
+    const { income, expense, balance } = totals();
+    const summary = state.transactions.slice(0, 20).map((t) =>
+      "- [" + t.type + "] " + t.category + ": Rp " + Math.round(t.amount) + " (" + t.description + ") oleh " + t.loggedBy
+    ).join("\n");
+    return (
+      "Kamu adalah konsultan dan analis keuangan profesional untuk Money Chat.\n" +
+      "Berikut rekap ringkas pengeluaran dan pemasukan grup/kelompok/keluarga periode ini:\n\n" +
+      "Total Pemasukan: Rp " + Math.round(income) + "\n" +
+      "Total Pengeluaran: Rp " + Math.round(expense) + "\n" +
+      "Sisa Saldo: Rp " + Math.round(balance) + "\n\n" +
+      "Daftar Transaksi Terakhir:\n" + summary + "\n\n" +
+      "Berikan evaluasi kesehatan keuangan ini dalam Bahasa Indonesia yang profesional, obyektif, dan solutif.\n" +
+      "Format tanggapanmu secara terstruktur:\n" +
+      "📌 **Evaluasi & Analisis Arus Kas**\n" +
+      "(Analisis jujur dan tajam mengenai rasio pengeluaran vs pemasukan, serta pos belanja paling menonjol)\n\n" +
+      "💡 **Rekomendasi Strategis**\n" +
+      "1. (Saran efisiensi pos pengeluaran operasional/harian)\n" +
+      "2. (Saran alokasi dana cadangan atau perencanaan anggaran ke depan)\n\n" +
+      "Gunakan nada bicara yang profesional, jelas, dan mengedukasi."
+    );
+  }
+
+  async function geminiAudit() {
+    return await callGemini(buildAuditPrompt());
+  }
+
+  async function openRouterAudit() {
+    return await callOpenRouter(buildAuditPrompt());
+  }
+
+  async function callOpenRouter(prompt) {
+    const key = state.openRouterKey;
+    if (!key || key.trim() === "") return null;
+    for (const model of OR_FREE_MODELS) {
+      try {
+        const res = await fetch(OR_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key.trim() },
+          body: JSON.stringify({ model, messages: [{ role: "user", content: prompt }], temperature: 0.2 }),
+        });
+        if (!res.ok) continue; // 429/402/404 → otomatis pindah ke model gratis berikutnya
+        const data = await res.json();
+        const text = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (typeof text === "string" && text.trim() !== "") return text;
+      } catch (_) { /* coba model berikutnya */ }
+    }
+    return null;
+  }
+
+  async function openRouterParse(text) {
+    const raw = await callOpenRouter(buildParsePrompt(text));
+    if (!raw) return null;
+    try {
+      const cleaned = raw.replace(/```json|```/g, "").trim();
+      const json = JSON.parse(cleaned);
+      if (json.containsTransaction) {
+        return {
+          financial: true,
+          type: json.type === "PEMASUKAN" ? "PEMASUKAN" : "PENGELUARAN",
+          category: json.category || "Lain-lain",
+          amount: Number(json.amount) || 0,
+          reply: json.aiReply || "Transaksi telah dicatat otomatis.",
+        };
+      }
+      return { financial: false, reply: json.aiReply || "Catatan pesan tersimpan dalam ruang obrolan." };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /* ============ Offline heuristic engine (fallback, mirrors GeminiService) ============ */
+  const INCOME_WORDS = ["gaji", "pemasukan", "transfer masuk", "bonus", "komisi", "uang jajan masuk", "uang kas", "kas masuk", "iuran masuk", "dapat"];
+  const EXPENSE_WORDS = ["beli", "bayar", "belanja", "pengeluaran", "habis", "ongkir", "sewa", "pulsa", "listrik", "air", "wifi", "token", "kontrakan", "pbb", "popok", "susu", "sekolah", "mainan", "bensin", "ojek", "grab", "gojek", "tol", "parkir", "makan", "minum", "kopi", "bakso", "snack", "skincare", "obat", "dokter", "sabun", "shampoo", "baju", "sepatu", "nonton", "tas", "shopee", "tokped", "beras", "minyak", "sayur", "sembako", "pasar", "supermarket"];
+
+  function detectAmount(text) {
+    const m = text.toLowerCase().match(/(\d+(?:[.,]\d+)?)\s*(rb|ribu|k|jt|juta|j)?/);
+    if (!m) return null;
+    let raw = parseFloat(m[1].replace(",", "."));
+    if (isNaN(raw)) return null;
+    const unit = m[2] || "";
+    if (unit === "rb" || unit === "ribu" || unit === "k") return raw * 1000;
+    if (unit === "jt" || unit === "juta" || unit === "j") return raw * 1_000_000;
+    if (raw >= 1 && raw <= 999) return raw * 1000;
+    return raw;
+  }
+
+  function detectCategory(text) {
+    const t = text.toLowerCase();
+    if (/(beras|minyak|sayur|sembako|pasar|supermarket)/.test(t)) return "Groceries & Sembako";
+    if (/(makan|minum|kopi|bakso|snack)/.test(t)) return "Makanan & Minuman";
+    if (/(listrik|air|wifi|pulsa|token|kontrakan|pbb)/.test(t)) return "Tagihan & Utilitas";
+    if (/(popok|susu|sekolah|mainan|anak)/.test(t)) return "Kebutuhan Anak";
+    if (/(bensin|ojek|grab|gojek|tol|parkir)/.test(t)) return "Transportasi";
+    if (/(skincare|obat|dokter|sabun|shampoo)/.test(t)) return "Kesehatan & Skincare";
+    if (/(baju|sepatu|nonton|tas|shopee|tokped)/.test(t)) return "Hiburan & Belanja";
+    if (/(kas|iuran|arisan)/.test(t)) return "Kas & Iuran";
+    return "Lain-lain";
+  }
+
+  function parseMessage(text) {
+    const lower = text.toLowerCase();
+    const amount = detectAmount(text);
+    const isIncome = INCOME_WORDS.some((w) => lower.includes(w)) && !/(bayar iuran)/.test(lower);
+    if (isIncome && amount && amount > 0) {
+      return {
+        financial: true, type: "PEMASUKAN", category: "Gaji & Pemasukan", amount,
+        reply: "Mantap! Aku catat PEMASUKAN sebesar Rp " + amount.toLocaleString("id-ID") + " (" + text + "). Saldo bertambah! 💰",
+      };
+    }
+    const isExpense = amount && amount > 0 && EXPENSE_WORDS.some((w) => lower.includes(w));
+    if (isExpense) {
+      const category = detectCategory(text);
+      return {
+        financial: true, type: "PENGELUARAN", category, amount,
+        reply: "Pengeluaran Rp " + amount.toLocaleString("id-ID") + " (" + category + ": " + text + ") dicatat oleh " + state.name + ".",
+      };
+    }
+    return { financial: false, reply: "Catatan pesan tersimpan dalam ruang obrolan. 📝" };
+  }
+
+  /* ============ Rendering ============ */
+  function renderClock() { $("clock").textContent = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }); }
+
+  function renderSenders() {
+    const row = $("senderRow");
+    row.innerHTML = "";
+    RAND_NAMES.forEach((name) => {
+      const b = document.createElement("button");
+      b.className = "chip" + (state.sender === name ? " active" : "");
+      b.textContent = name;
+      b.onclick = () => { state.sender = name; renderSenders(); save(); };
+      row.appendChild(b);
+    });
+  }
+
+  const ICONS = {
+    in: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l11-11 5 5L9 22z"/><path d="M17 8l-5-5"/></svg>',
+  };
+
+  function renderMessages() {
+    const list = $("msgList");
+    list.innerHTML = "";
+    state.messages.forEach((msg) => {
+      const el = document.createElement("div");
+      el.className = "msg " + msg.from;
+      const ava = msg.from === "me"
+        ? ""
+        : '<span class="ava' + (msg.from === "ai" ? " ai" : "") + '">' +
+          (msg.from === "ai" ? "✦" : (AVATARS[msg.name] || ((msg.name || "?").charAt(0) || "?").toUpperCase())) +
+          "</span>";
+      const meta = '<div class="meta">' + ava + '<b>' + esc(msg.name || "Pesan") + '</b><time>' + esc(msg.time) + "</time></div>";
+      const tag = msg.tag
+        ? '<div class="tag ' + (msg.tag.type === "PEMASUKAN" ? "in" : "out") + '">' +
+          ICONS[msg.tag.type === "PEMASUKAN" ? "in" : "out"] +
+          (msg.tag.type === "PEMASUKAN" ? "+ " : "- ") + fmtRp(msg.tag.amount) + " (" + esc(msg.tag.category) + ")" +
+          "</div>"
+        : "";
+      el.innerHTML = meta + '<div class="bubble">' + esc(msg.text) + tag + "</div>";
+      list.appendChild(el);
+    });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function renderSuggestions() {
+    const box = $("suggests");
+    const fresh = computeSuggestions();
+    box.innerHTML = "";
+    fresh.forEach((s) => {
+      const b = document.createElement("button");
+      b.textContent = s;
+      b.onclick = () => { $("msgInput").value = s; $("msgInput").focus(); $("sendBtn").disabled = false; };
+      box.appendChild(b);
+    });
+  }
+
+  function computeSuggestions() {
+    if (state.transactions.length === 0) return ["Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000"];
+    const counts = {};
+    state.transactions.forEach((t) => { counts[t.description] = (counts[t.description] || 0) + 1; });
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([d]) => d);
+    return top.concat(["Makan siang 25.000", "Bayar listrik 100.000"]).slice(0, 4);
+  }
+
+  function totals() {
+    const income = state.transactions.filter((t) => t.type === "PEMASUKAN").reduce((s, t) => s + t.amount, 0);
+    const expense = state.transactions.filter((t) => t.type === "PENGELUARAN").reduce((s, t) => s + t.amount, 0);
+    return { income, expense, balance: income - expense };
+  }
+
+  function renderRekap() {
+    const { income, expense, balance } = totals();
+    $("cards").innerHTML =
+      '<div class="card full"><div class="label">Saldo</div><div class="amount">' + fmtRp(balance) + "</div></div>" +
+      '<div class="card"><div class="label">Pemasukan</div><div class="amount in">' + fmtRp(income) + "</div></div>" +
+      '<div class="card"><div class="label">Pengeluaran</div><div class="amount out">' + fmtRp(expense) + "</div></div>";
+
+    const list = $("txList");
+    if (state.transactions.length === 0) {
+      list.innerHTML = '<div class="empty">Belum ada transaksi.<br/>Kirim pesan berisi nominal di tab Diskusi 🧾</div>';
+      return;
+    }
+    list.innerHTML = "";
+    state.transactions.forEach((t) => {
+      const isIn = t.type === "PEMASUKAN";
+      const el = document.createElement("div");
+      el.className = "tx";
+      el.innerHTML =
+        '<div class="cat ' + (isIn ? "in" : "out") + '">' + (CAT_EMOJI[t.category] || "📦") + "</div>" +
+        '<div class="body"><div class="desc">' + esc(t.description) + '</div><div class="sub">' + esc(t.category) + " · " + esc(t.loggedBy) + " · " + esc(t.time) + "</div></div>" +
+        '<div class="amt ' + (isIn ? "in" : "out") + '">' + (isIn ? "+ " : "− ") + fmtRp(t.amount) + "</div>" +
+        '<button class="del" title="Hapus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>';
+      el.querySelector(".del").onclick = () => {
+        state.transactions = state.transactions.filter((x) => x.id !== t.id);
+        toast("Transaksi dihapus 🗑️");
+        renderRekap(); renderSuggestions(); save();
+      };
+      list.appendChild(el);
+    });
+  }
+
+  function localAuditHtml() {
+    const { income, expense, balance } = totals();
+    const ratioOk = !(expense > income && income > 0);
+    return (
+      "📌 <b>Evaluasi &amp; Analisis Arus Kas</b>\n" +
+      "• <b>Arus Kas</b>: Total Pemasukan " + fmtRp(income) + " vs Pengeluaran " + fmtRp(expense) + " (Sisa Saldo: " + fmtRp(balance) + ").\n" +
+      "• <b>Tinjauan Obyektif</b>: " + (ratioOk
+        ? "Rasio keuangan sehat dan berada dalam batas anggaran aman."
+        : "Pengeluaran melampaui pemasukan! Diperlukan pengetatan pada pos operasional dan belanja non-prioritas.") +
+      "\n\n💡 <b>Rekomendasi Strategis</b>\n" +
+      "1. <b>Optimalisasi Anggaran Rutin</b>: Tetapkan batas plafon mingguan untuk pos operasional harian agar alokasi kas terprediksi.\n" +
+      "2. <b>Alokasi Dana Cadangan</b>: Sisihkan minimal 10–15% dari pemasukan ke kas cadangan sebelum memenuhi pengeluaran sekunder."
+    );
+  }
+
+  function formatAiText(text) {
+    return esc(text)
+      .replace(/^\s+|\s+$/g, "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((l) => l !== "")
+      .map((line) => line.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/^\s*[-•]\s+/, "• "))
+      .join("\n");
+  }
+
+  /* ============ Theme ============ */
+  function applyTheme() {
+    document.documentElement.classList.toggle("dark", state.dark);
+    $("themeLabel").textContent = state.dark ? "Mode Terang" : "Mode Gelap";
+  }
+
+  /* ============ Interactions ============ */
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 2400);
+  }
+
+  function addAiThinking(id) {
+    const list = $("msgList");
+    const el = document.createElement("div");
+    el.className = "msg ai";
+    el.id = id;
+    el.innerHTML = '<div class="meta"><span class="ava ai">✦</span><b>Asisten AI</b></div><div class="bubble typing"><i></i><i></i><i></i></div>';
+    list.appendChild(el);
+    list.scrollTop = list.scrollHeight;
+    return el;
+  }
+
+  async function sendMessage() {
+    const input = $("msgInput");
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    $("sendBtn").disabled = true;
+
+    const t = fmtTime();
+    const typingId = "typing-" + uid();
+    state.messages.push({ id: uid(), from: "me", name: state.sender, text, time: t, tag: null });
+    renderMessages();
+    save();
+
+    addAiThinking(typingId);
+
+    const [aiResult] = await Promise.all([
+      (async () => {
+        if (state.openRouterKey) return openRouterParse(text);
+        if (state.geminiKey) return geminiParse(text);
+        return null;
+      })(),
+      new Promise((r) => setTimeout(r, 500)),
+    ]);
+    const result = aiResult || parseMessage(text);
+
+    const typing = document.getElementById(typingId);
+    if (typing) typing.remove();
+
+    if (result.financial) {
+      const mine = state.messages[state.messages.length - 1];
+      mine.tag = { type: result.type, amount: result.amount, category: result.category };
+      state.transactions.push({ id: uid(), type: result.type, category: result.category, amount: result.amount, description: text, loggedBy: state.sender, time: t });
+      renderRekap();
+      renderSuggestions();
+    }
+    state.messages.push({ id: uid(), from: "ai", name: "AI", text: result.reply, time: fmtTime(), tag: null });
+    renderMessages();
+    save();
+  }
+
+  function showMain() {
+    $("pinView").hidden = true;
+    $("mainView").hidden = false;
+    renderSenders(); renderMessages(); renderRekap(); renderSuggestions(); renderAiChip();
+  }
+
+  function fillCategories() {
+    const sel = $("addCat");
+    sel.innerHTML = "";
+    CATEGORIES.forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+  }
+
+  function openKeyModal() {
+    $("keyInput").value = state.geminiKey || "";
+    const st = $("keyStatus");
+    if (state.geminiKey) {
+      st.textContent = "Key terpasang ✅ — AI pakai jatah Gemini akun-mu";
+      st.classList.remove("off");
+    } else {
+      st.textContent = "Belum ada key — AI pakai mesin offline";
+      st.classList.add("off");
+    }
+    $("keyModalOverlay").hidden = false;
+  }
+
+  function openOrKeyModal() {
+    $("orKeyInput").value = state.openRouterKey || "";
+    const st = $("orKeyStatus");
+    if (state.openRouterKey) {
+      st.textContent = "Key terpasang ✅ — model gratis + rotasi otomatis";
+      st.classList.remove("off");
+    } else {
+      st.textContent = "Belum ada key — AI pakai mesin offline";
+      st.classList.add("off");
+    }
+    $("orKeyModalOverlay").hidden = false;
+  }
+
+  /* ============ Boot ============ */
+  function boot() {
+    applyTheme();
+    renderClock();
+    setInterval(renderClock, 15000);
+    fillCategories();
+
+    $("pinInput").value = state.pin || "";
+    $("nameInput").value = state.name || "";
+
+    $("connectBtn").onclick = () => {
+      const pin = $("pinInput").value.trim();
+      const name = $("nameInput").value.trim();
+      if (pin.length < 4 || !name) {
+        toast("Isi PIN (min. 4 digit) dan nama Anda dulu");
+        return;
+      }
+      state.pin = pin;
+      state.name = name;
+      save();
+      showMain();
+      toast("Terhubung ke workspace «" + pin + "» 🎉");
+    };
+
+    $("sendBtn").onclick = sendMessage;
+    $("msgInput").addEventListener("input", () => { $("sendBtn").disabled = !$("msgInput").value.trim(); });
+    $("msgInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendMessage(); });
+
+    document.querySelectorAll(".bottombar button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll(".bottombar button").forEach((b) => b.classList.toggle("active", b === btn));
+        const isChat = btn.dataset.tab === "chat";
+        $("chatView").hidden = !isChat;
+        $("rekapView").hidden = isChat;
+        if (!isChat) renderRekap();
+      };
+    });
+
+    $("menuBtn").onclick = () => { $("menu").hidden = !$("menu").hidden; };
+    document.addEventListener("click", (e) => { if (!$("menu").hidden && !$("menu").contains(e.target) && !$("menuBtn").contains(e.target)) $("menu").hidden = true; });
+
+    $("themeBtn").onclick = () => { state.dark = !state.dark; applyTheme(); save(); $("menu").hidden = true; toast(state.dark ? "Mode Gelap aktif 🌙" : "Mode Terang aktif ☀️"); };
+
+    $("keyBtn").onclick = () => { $("menu").hidden = true; openKeyModal(); };
+    $("keyClose").onclick = () => { $("keyModalOverlay").hidden = true; };
+    $("keyCancel").onclick = () => { $("keyModalOverlay").hidden = true; };
+    $("keyModalOverlay").addEventListener("click", (e) => { if (e.target === $("keyModalOverlay")) $("keyModalOverlay").hidden = true; });
+    $("keySave").onclick = () => {
+      const v = $("keyInput").value.trim();
+      state.geminiKey = v === "" ? null : v;
+      save();
+      $("keyModalOverlay").hidden = true;
+      renderAiChip();
+      toast(v ? "Key Gemini tersimpan 🔑" : "Key dihapus");
+    };
+
+    $("orKeyBtn").onclick = () => { $("menu").hidden = true; openOrKeyModal(); };
+    $("orKeyClose").onclick = () => { $("orKeyModalOverlay").hidden = true; };
+    $("orKeyCancel").onclick = () => { $("orKeyModalOverlay").hidden = true; };
+    $("orKeyModalOverlay").addEventListener("click", (e) => { if (e.target === $("orKeyModalOverlay")) $("orKeyModalOverlay").hidden = true; });
+    $("orKeySave").onclick = () => {
+      const v = $("orKeyInput").value.trim();
+      state.openRouterKey = v === "" ? null : v;
+      save();
+      $("orKeyModalOverlay").hidden = true;
+      renderAiChip();
+      toast(v ? "Key OpenRouter tersimpan 🔑" : "Key dihapus");
+    };
+
+    $("logoutLabel").textContent = "Logout (" + (state.name || "User") + ")";
+    $("logoutBtn").onclick = () => {
+      localStorage.removeItem(LS_KEY);
+      state = load();
+      applyTheme();
+      renderAiChip();
+      $("mainView").hidden = true;
+      $("pinView").hidden = false;
+      $("pinInput").value = ""; $("nameInput").value = "";
+      toast("Berhasil logout 👋");
+    };
+
+    $("clearBtn").onclick = () => {
+      state.messages = [];
+      state.transactions = [];
+      save();
+      renderMessages(); renderRekap(); renderSuggestions(); $("menu").hidden = true;
+      toast("Semua data dihapus 🧹");
+    };
+
+    /* Audit: OpenRouter → Gemini → offline */
+    $("auditBtn").onclick = async () => {
+      const btn = $("auditBtn");
+      const icon = $("auditIcon");
+      btn.disabled = true;
+      $("auditLabel").textContent = "Menganalisis…";
+      icon.classList.add("spin");
+      const [report] = await Promise.all([
+        (async () => {
+          if (state.openRouterKey) return openRouterAudit();
+          if (state.geminiKey) return geminiAudit();
+          return null;
+        })(),
+        new Promise((r) => setTimeout(r, 700)),
+      ]);
+      icon.classList.remove("spin");
+      $("auditLabel").textContent = "Laporan AI";
+      btn.disabled = false;
+      $("reportText").innerHTML = report ? formatAiText(report) : localAuditHtml();
+      $("modalOverlay").hidden = false;
+    };
+    $("modalClose").onclick = () => { $("modalOverlay").hidden = true; };
+    $("modalOverlay").addEventListener("click", (e) => { if (e.target === $("modalOverlay")) $("modalOverlay").hidden = true; });
+
+    /* Manual transaction */
+    let addType = "PENGELUARAN";
+    document.querySelectorAll("#typeSeg .seg-btn").forEach((b) => {
+      b.onclick = () => {
+        document.querySelectorAll("#typeSeg .seg-btn").forEach((x) => x.classList.toggle("active", x === b));
+        addType = b.dataset.type;
+      };
+    });
+    $("addBtn").onclick = () => { $("addAmount").value = ""; $("addDesc").value = ""; $("addModalOverlay").hidden = false; };
+    $("addClose").onclick = () => { $("addModalOverlay").hidden = true; };
+    $("addCancel").onclick = () => { $("addModalOverlay").hidden = true; };
+    $("addModalOverlay").addEventListener("click", (e) => { if (e.target === $("addModalOverlay")) $("addModalOverlay").hidden = true; });
+    $("addSave").onclick = () => {
+      const amount = Number($("addAmount").value);
+      const desc = $("addDesc").value.trim();
+      if (!amount || amount <= 0 || !desc) {
+        toast("Isi nominal & keterangan dulu");
+        return;
+      }
+      state.transactions.unshift({
+        id: uid(), type: addType, category: $("addCat").value, amount,
+        description: desc, loggedBy: state.sender, time: fmtTime(),
+      });
+      save();
+      $("addModalOverlay").hidden = true;
+      renderRekap(); renderSuggestions();
+      toast("Transaksi ditambahkan ✅");
+    };
+
+    if (state.pin && state.name) showMain();
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
