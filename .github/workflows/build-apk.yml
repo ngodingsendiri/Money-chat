@@ -1,12 +1,12 @@
 name: Build APK
 
-# Menghasilkan APK Money Chat v1 dari GitHub.
+# Menghasilkan APK Money Chat dari GitHub.
 # - APK debug (langsung bisa diinstall) selalu dibuat dan diunggah sebagai artifact.
+# - Saat push TAG v* -> otomatis dibuat GitHub Release berisi APK (link download permanen).
 # - APK release (ditandatangani) otomatis dibuat kalau secrets keystore disiapkan:
 #     KEYSTORE_BASE64    -> isi file keystore (.jks) dalam base64
 #     KEYSTORE_PASSWORD  -> password keystore (STORE_PASSWORD)
 #     KEY_PASSWORD       -> password key (alias "upload")
-# Artifact diunduh dari tab Actions -> workflow terbaru -> Artifacts.
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -72,3 +72,15 @@ jobs:
           name: MoneyChat-v1.0.1-release
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: warn
+
+      - name: Buat GitHub Release (khusus tag v*)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Money Chat ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release.apk
+          fail_on_unmatched_files: false
+          generate_release_notes: true
