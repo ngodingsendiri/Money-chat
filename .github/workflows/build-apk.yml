@@ -1,12 +1,12 @@
 name: Build APK
 
 # Menghasilkan APK Money Chat v1 dari GitHub.
-# - APK debug (langsung bisa diinstall) selalu dibuat.
+# - APK debug (langsung bisa diinstall) selalu dibuat dan diunggah sebagai artifact.
 # - APK release (ditandatangani) otomatis dibuat kalau secrets keystore disiapkan:
 #     KEYSTORE_BASE64    -> isi file keystore (.jks) dalam base64
-#     KEYSTORE_PASSWORD  -> STORE_PASSWORD (password keystore)
+#     KEYSTORE_PASSWORD  -> password keystore (STORE_PASSWORD)
 #     KEY_PASSWORD       -> password key (alias "upload")
-# Artifact bisa diunduh dari tab Actions → workflow terbaru → Artifacts.
+# Artifact diunduh dari tab Actions -> workflow terbaru -> Artifacts.
 
 on:
   push:
@@ -30,12 +30,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Gradle (cache)
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Accept Android SDK licenses
-        uses: android-actions/setup-android@v3
-
       - name: Generate debug keystore
         # app/build.gradle.kts menandatangani build debug dengan ${rootDir}/debug.keystore
         run: |
@@ -55,20 +49,23 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Build signed release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      - name: Build signed release APK (jika secrets keystore diset)
         env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::notice::Keystore secrets belum diset — APK release dilewati (APK debug tetap tersedia)."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
           ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Upload release APK
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+      - name: Upload release APK (jika ada)
         uses: actions/upload-artifact@v4
         with:
           name: MoneyChat-v1.0.0-release
           path: app/build/outputs/apk/release/app-release.apk
-          if-no-files-found: error
+          if-no-files-found: warn
