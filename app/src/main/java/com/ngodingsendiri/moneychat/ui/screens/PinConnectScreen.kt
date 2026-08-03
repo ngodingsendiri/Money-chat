@@ -93,6 +93,21 @@ fun PinConnectScreen(
         }
     }
 
+    /** SHA-1 sidik jari sertifikat penandatangan APK yang terpasang — persis
+     *  nilai yang harus didaftarkan di Firebase Console → Pengaturan project →
+     *  Aplikasi Anda → Tambahkan sidik jari. */
+    fun signingCertSha1(context: Context): String? = try {
+        val info = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_SIGNATURES
+        )
+        val cert = info.signatures?.firstOrNull() ?: return null
+        val sha1 = MessageDigest.getInstance("SHA-1").digest(cert.toByteArray())
+        sha1.joinToString(":") { "%02X".format(it) }
+    } catch (e: Exception) {
+        null
+    }
+
     fun startGoogleSignIn() {
         val clientId = webClientId
         if (clientId == null) {
@@ -180,21 +195,6 @@ fun PinConnectScreen(
                 isSigningIn = false
             }
         }
-    }
-
-    /** SHA-1 sidik jari sertifikat penandatangan APK yang terpasang — persis
-     *  nilai yang harus didaftarkan di Firebase Console → Pengaturan project →
-     *  Aplikasi Anda → Tambahkan sidik jari. */
-    fun signingCertSha1(context: Context): String? = try {
-        val info = context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.GET_SIGNATURES
-        )
-        val cert = info.signatures.firstOrNull() ?: return null
-        val sha1 = MessageDigest.getInstance("SHA-1").digest(cert.toByteArray())
-        sha1.joinToString(":") { "%02X".format(it) }
-    } catch (e: Exception) {
-        null
     }
 
     fun signOutGoogle() {
