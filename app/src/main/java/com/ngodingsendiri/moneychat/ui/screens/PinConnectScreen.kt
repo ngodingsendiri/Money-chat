@@ -289,7 +289,9 @@ fun PinConnectScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                                    ),
                                     elevation = CardDefaults.cardElevation(0.dp)
                                 ) {
                                     Column(

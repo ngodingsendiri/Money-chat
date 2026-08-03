@@ -97,15 +97,18 @@ object FirestoreSyncManager {
 
     // ---------- Baca: snapshot listener realtime ----------
 
-    private fun listenMessages() {
+    private fun listenMessages(retryDelayMs: Long = MIN_RETRY_DELAY_MS) {
         messagesListener = messagesRef().addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.w(TAG, "Listen messages gagal: ${error.message}. Retry dengan backoff...")
-                // Hapus listener yang error, lalu jadwalkan retry dengan exponential backoff
+                Log.w(TAG, "Listen messages gagal: ${error.message}. Retry dalam ${retryDelayMs / 1000}s...")
                 messagesListener?.remove()
                 messagesListener = null
                 CoroutineScope(Dispatchers.IO).launch {
-                    retryWithBackoff(label = "messages", action = ::listenMessages)
+                    retryWithBackoff(
+                        label = "messages",
+                        delayMs = retryDelayMs,
+                        action = { listenMessages((retryDelayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS)) }
+                    )
                 }
                 return@addSnapshotListener
             }
@@ -128,14 +131,18 @@ object FirestoreSyncManager {
         }
     }
 
-    private fun listenTransactions() {
+    private fun listenTransactions(retryDelayMs: Long = MIN_RETRY_DELAY_MS) {
         transactionsListener = transactionsRef().addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.w(TAG, "Listen transactions gagal: ${error.message}. Retry dengan backoff...")
+                Log.w(TAG, "Listen transactions gagal: ${error.message}. Retry dalam ${retryDelayMs / 1000}s...")
                 transactionsListener?.remove()
                 transactionsListener = null
                 CoroutineScope(Dispatchers.IO).launch {
-                    retryWithBackoff(label = "transactions", action = ::listenTransactions)
+                    retryWithBackoff(
+                        label = "transactions",
+                        delayMs = retryDelayMs,
+                        action = { listenTransactions((retryDelayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS)) }
+                    )
                 }
                 return@addSnapshotListener
             }
@@ -160,12 +167,13 @@ object FirestoreSyncManager {
 
     /**
      * Menunggu dengan exponential backoff sebelum memanggil ulang [action].
-     * Backoff: 1s → 2s → 4s → 8s → 16s → 32s (cap).
+     * Setiap pemanggil meneruskan delayMs yang sudah berlipat dua, sehingga
+     * urutan delay: 1s → 2s → 4s → 8s → 16s → 32s (cap).
      * Berhenti otomatis jika familyId kosong (listener sudah di-stop via logout).
      */
     private suspend fun retryWithBackoff(label: String, delayMs: Long = MIN_RETRY_DELAY_MS, action: () -> Unit) {
         if (familyId.isEmpty()) return // sudah logout, jangan retry
-        Log.d(TAG, "[$label] Retry dalam ${delayMs / 1000}s...")
+        Log.d(TAG, "[$label] Retry dalam ${delayMs / 1000}s (next: ${(delayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS) / 1000}s)...")
         delay(delayMs)
         if (familyId.isEmpty()) return
         action()

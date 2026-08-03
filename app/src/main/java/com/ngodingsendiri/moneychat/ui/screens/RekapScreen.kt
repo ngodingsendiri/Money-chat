@@ -83,12 +83,20 @@ import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 import com.ngodingsendiri.moneychat.ui.theme.AiPurple
 import com.ngodingsendiri.moneychat.ui.theme.AiPurpleLight
+import com.ngodingsendiri.moneychat.ui.theme.CategoryColorsDark
+import com.ngodingsendiri.moneychat.ui.theme.CategoryColorsLight
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedDark
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
 import com.ngodingsendiri.moneychat.ui.theme.HusbandBlue
+import com.ngodingsendiri.moneychat.ui.theme.HusbandBlueDark
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenDark
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagExpenseDark
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagIncomeDark
 import com.ngodingsendiri.moneychat.ui.theme.WifePink
+import com.ngodingsendiri.moneychat.ui.theme.WifePinkDark
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -100,16 +108,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// Custom Category Accent Colors for Rich Data Visualization
-private val CategoryColors = listOf(
-    Color(0xFF4285F4), // Google Blue
-    Color(0xFFEA4335), // Google Red
-    Color(0xFFFBBC05), // Google Yellow
-    Color(0xFF34A853), // Google Green
-    Color(0xFF9334E6), // Google Purple
-    Color(0xFF12B5CB), // Google Cyan
-    Color(0xFFFA7B17)  // Google Orange
-)
+// Warna kategori dipilih sesuai tema — dipanggil di sisi Composable
 
 @Composable
 fun RekapScreen(
@@ -123,6 +122,8 @@ fun RekapScreen(
     onEditTransaction: (FinancialTransaction) -> Unit
 ) {
     val balance = totalIncome - totalExpense
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val categoryColors = if (isDark) CategoryColorsDark else CategoryColorsLight
 
     var selectedFilterTab by remember { mutableStateOf(0) } // 0: Semua, 1: Pengeluaran, 2: Pemasukan
     var pendingDelete by remember { mutableStateOf<FinancialTransaction?>(null) }
@@ -268,14 +269,14 @@ fun RekapScreen(
                                 DonutChart(
                                     categoryTotals = categoryTotals,
                                     totalExpense = totalExpense,
-                                    colors = CategoryColors
+                                    colors = categoryColors
                                 )
                                 
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 categoryTotals.forEachIndexed { index, (category, amount) ->
                                     val percentage = if (totalExpense > 0) (amount / totalExpense).toFloat() else 0f
-                                    val accentColor = CategoryColors[index % CategoryColors.size]
+                                    val accentColor = categoryColors[index % categoryColors.size]
                                     
                                     CategoryProgressRow(
                                         category = category,
@@ -471,10 +472,17 @@ fun BalanceBannerCard(
     totalExpense: Double,
     balance: Double
 ) {
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val currencyFormat = remember {
         NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
             maximumFractionDigits = 0
         }
+    }
+    // Warna balance: hijau jika surplus, merah jika defisit, default jika nol
+    val balanceColor = when {
+        balance > 0 -> if (isDark) IncomeGreenDark else IncomeGreen
+        balance < 0 -> if (isDark) ExpenseRedDark else ExpenseRed
+        else -> MaterialTheme.colorScheme.onSurface
     }
 
     Card(
@@ -539,7 +547,7 @@ fun BalanceBannerCard(
                 text = currencyFormat.format(balance),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = balanceColor,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
@@ -712,7 +720,10 @@ fun TransactionItemCard(
 
     val dateFormat = remember { SimpleDateFormat("dd MMM, HH:mm", Locale.forLanguageTag("id-ID")) }
 
-    val amountColor = if (isIncome) IncomeGreen else ExpenseRed
+    val amountColor = when {
+        isIncome -> if (MaterialTheme.colorScheme.background.luminance() < 0.5f) IncomeGreenDark else IncomeGreen
+        else     -> if (MaterialTheme.colorScheme.background.luminance() < 0.5f) ExpenseRedDark else ExpenseRed
+    }
     val amountPrefix = if (isIncome) "+ " else "- "
 
     val loggedByTag = when (transaction.loggedBy) {
@@ -810,13 +821,23 @@ fun TransactionItemCard(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(RoundedCornerShape(11.dp))
-                            .background(if (isIncome) IncomeGreenLight else ExpenseRedLight),
+                            .background(
+                                if (isIncome) {
+                                    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) MoneyTagIncomeDark else IncomeGreenLight
+                                } else {
+                                    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) MoneyTagExpenseDark else ExpenseRedLight
+                                }
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = getCategoryIcon(transaction.category),
                             contentDescription = null,
-                            tint = if (isIncome) IncomeGreen else ExpenseRed,
+                            tint = if (isIncome) {
+                                if (MaterialTheme.colorScheme.background.luminance() < 0.5f) IncomeGreenDark else IncomeGreen
+                            } else {
+                                if (MaterialTheme.colorScheme.background.luminance() < 0.5f) ExpenseRedDark else ExpenseRed
+                            },
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -852,7 +873,11 @@ fun TransactionItemCard(
                             Text(
                                 text = loggedByTag,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (transaction.loggedBy == "ISTRI" || transaction.loggedBy == "Anggota") WifePink else HusbandBlue,
+                                color = if (transaction.loggedBy == "ISTRI" || transaction.loggedBy == "Anggota") {
+                                    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) WifePinkDark else WifePink
+                                } else {
+                                    if (MaterialTheme.colorScheme.background.luminance() < 0.5f) HusbandBlueDark else HusbandBlue
+                                },
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis

@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,9 +48,13 @@ import androidx.compose.ui.unit.dp
 import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedDark
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenDark
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagExpenseDark
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagIncomeDark
 import kotlinx.coroutines.launch
 
 /** Format nominal untuk prefill kolom edit (angka bulat tanpa desimal). */
@@ -95,6 +100,7 @@ fun AddTransactionDialog(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     fun dismiss() {
         scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -154,8 +160,8 @@ fun AddTransactionDialog(
                     },
                     label = { Text(stringResource(R.string.add_type_expense), fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = ExpenseRedLight,
-                        selectedLabelColor = ExpenseRed,
+                        selectedContainerColor = if (isDark) MoneyTagExpenseDark else ExpenseRedLight,
+                        selectedLabelColor = if (isDark) ExpenseRedDark else ExpenseRed,
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -170,8 +176,8 @@ fun AddTransactionDialog(
                     },
                     label = { Text(stringResource(R.string.add_type_income), fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = IncomeGreenLight,
-                        selectedLabelColor = IncomeGreen,
+                        selectedContainerColor = if (isDark) MoneyTagIncomeDark else IncomeGreenLight,
+                        selectedLabelColor = if (isDark) IncomeGreenDark else IncomeGreen,
                     ),
                     modifier = Modifier
                         .weight(1f)

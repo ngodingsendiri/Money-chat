@@ -112,6 +112,7 @@ import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.ngodingsendiri.moneychat.ui.theme.AiPurple
+import com.ngodingsendiri.moneychat.ui.theme.AiPurpleDark
 import com.ngodingsendiri.moneychat.ui.theme.AiPurpleLight
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
@@ -608,8 +609,8 @@ fun ChatScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f)
                         ),
                         maxLines = 4,
                         minLines = 1,
@@ -811,12 +812,13 @@ fun ChatMessageBubble(
 
     // Warna bubble lebih lembut & konsisten dengan tema (container tones)
     val bubbleColor = when {
-        isAi -> if (isDark) Color(0xFF2A2140) else AiPurpleLight
+        isAi -> if (isDark) MaterialTheme.colorScheme.surfaceVariant else AiPurpleLight
         isMe -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
     val textColor = when {
+        isAi -> if (isDark) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
         isMe -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
@@ -836,7 +838,7 @@ fun ChatMessageBubble(
 
     val senderColor = when {
         isMe -> MaterialTheme.colorScheme.primary
-        isAi -> if (isDark) Color(0xFFD0BCFF) else AiPurple
+        isAi -> if (isDark) AiPurpleDark else AiPurple
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1108,6 +1110,7 @@ fun ChatMessageBubble(
 @Composable
 fun AiThinkingBubble(modifier: Modifier = Modifier) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val aiColor = if (isDark) AiPurpleDark else AiPurple
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -1116,8 +1119,8 @@ fun AiThinkingBubble(modifier: Modifier = Modifier) {
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = if (isDark) Color(0xFF331650) else AiPurpleLight,
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFFD0BCFF) else AiPurple.copy(alpha = 0.3f))
+            color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else AiPurpleLight,
+            border = androidx.compose.foundation.BorderStroke(1.dp, aiColor.copy(alpha = 0.3f))
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -1125,14 +1128,14 @@ fun AiThinkingBubble(modifier: Modifier = Modifier) {
             ) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(16.dp),
-                    color = if (isDark) Color(0xFFD0BCFF) else AiPurple,
+                    color = aiColor,
                     strokeWidth = 2.dp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.chat_ai_thinking),
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isDark) Color(0xFFD0BCFF) else AiPurple,
+                    color = aiColor,
                     fontWeight = FontWeight.Medium
                 )
             }
