@@ -64,6 +64,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -148,7 +157,7 @@ class MainActivity : ComponentActivity() {
 
                 var selectedTab by rememberSaveable { mutableIntStateOf(0) }
                 var showAddDialog by remember { mutableStateOf(false) }
-                var showSettingsMenu by remember { mutableStateOf(false) }
+                var showSettingsSheet by remember { mutableStateOf(false) }
                 var showGeminiKeyDialog by remember { mutableStateOf(false) }
                 var showOpenRouterKeyDialog by remember { mutableStateOf(false) }
                 var showConfirmClearDialog by remember { mutableStateOf(false) }
@@ -376,183 +385,19 @@ class MainActivity : ComponentActivity() {
                             topBar = {
                                 TopAppBar(
                                     title = {
-                                        Column {
-                                            Text(
-                                                text = stringResource(R.string.topbar_title),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 18.sp
-                                            )
-                                            Text(
-                                                text = stringResource(R.string.topbar_subtitle),
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                                            )
-                                        }
+                                        Text(
+                                            text = stringResource(R.string.topbar_title),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 17.sp
+                                        )
                                     },
                                     actions = {
-                                        Box {
-                                            IconButton(onClick = { showSettingsMenu = true }) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.Settings,
-                                                    contentDescription = stringResource(R.string.action_settings),
-                                                    tint = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            DropdownMenu(
-                                                expanded = showSettingsMenu,
-                                                onDismissRequest = { showSettingsMenu = false }
-                                            ) {
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_version, BuildConfig.VERSION_NAME)) },
-                                                    onClick = {},
-                                                    enabled = false
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_pin)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        showPinDialog = true
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(imageVector = Icons.Rounded.Pin, contentDescription = null)
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
-                                                    onClick = { 
-                                                        isDarkMode = !isDarkMode
-                                                        prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply()
-                                                        showSettingsMenu = false
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = if (isDarkMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_gemini_key)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        showGeminiKeyDialog = true
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Key,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_openrouter_key)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        showOpenRouterKeyDialog = true
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Route,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_check_update)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        scope.launch {
-                                                            val release = GitHubUpdateChecker.checkLatest()
-                                                            if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
-                                                                updateInfo = release
-                                                            } else {
-                                                                updateMessage = context.getString(R.string.update_no_update)
-                                                            }
-                                                        }
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.SystemUpdate,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_export_csv)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        exportCsvLauncher.launch(
-                                                            "MoneyChat-rekap-${timestampForFile()}.csv"
-                                                        )
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.TableChart,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_backup_drive)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        startDriveBackup()
-                                                    },
-                                                    enabled = !backupBusy,
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.CloudUpload,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_restore_drive)) },
-                                                    onClick = {
-                                                        showSettingsMenu = false
-                                                        startDriveRestore()
-                                                    },
-                                                    enabled = !backupBusy,
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.CloudDownload,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_clear_data)) },
-                                                    onClick = { 
-                                                        showSettingsMenu = false
-                                                        showConfirmClearDialog = true
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.Rounded.Delete,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(R.string.menu_logout, userName ?: "User")) },
-                                                    onClick = { 
-                                                        com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
-                                                        firebaseReady = false
-                                                        prefs.edit().clear().apply()
-                                                        workspacePin = null
-                                                        userName = null
-                                                        geminiKey = null
-                                                        openRouterKey = null
-                                                        showSettingsMenu = false
-                                                    },
-                                                    leadingIcon = {
-                                                        Icon(
-                                                            imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
-                                                            contentDescription = null
-                                                        )
-                                                    }
-                                                )
-                                            }
+                                        IconButton(onClick = { showSettingsSheet = true }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Settings,
+                                                contentDescription = stringResource(R.string.action_settings),
+                                                tint = MaterialTheme.colorScheme.onSurface
+                                            )
                                         }
                                     },
                                     colors = TopAppBarDefaults.topAppBarColors(
@@ -670,6 +515,178 @@ class MainActivity : ComponentActivity() {
                                         editTarget = null
                                     }
                                 )
+                            }
+
+                            // Settings Bottom Sheet — terstruktur per kategori
+                            if (showSettingsSheet) {
+                                val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                                ModalBottomSheet(
+                                    onDismissRequest = { showSettingsSheet = false },
+                                    sheetState = settingsSheetState,
+                                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .verticalScroll(rememberScrollState())
+                                            .padding(horizontal = 4.dp, vertical = 4.dp)
+                                    ) {
+                                        // Header
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 20.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Settings,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = stringResource(R.string.action_settings),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.weight(1f))
+                                            Text(
+                                                text = stringResource(R.string.menu_version, BuildConfig.VERSION_NAME),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                            )
+                                        }
+
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+                                        // ── UMUM ──
+                                        Text(
+                                            text = "Umum",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
+                                            onClick = {
+                                                isDarkMode = !isDarkMode
+                                                prefs.edit().putBoolean("is_dark_mode", isDarkMode).apply()
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (isDarkMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_check_update)) },
+                                            onClick = {
+                                                showSettingsSheet = false
+                                                scope.launch {
+                                                    val release = GitHubUpdateChecker.checkLatest()
+                                                    if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
+                                                        updateInfo = release
+                                                    } else {
+                                                        updateMessage = context.getString(R.string.update_no_update)
+                                                    }
+                                                }
+                                            },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.SystemUpdate, contentDescription = null) }
+                                        )
+
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+
+                                        // ── AI & API ──
+                                        Text(
+                                            text = "AI & API",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_gemini_key)) },
+                                            onClick = { showSettingsSheet = false; showGeminiKeyDialog = true },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.Key, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_openrouter_key)) },
+                                            onClick = { showSettingsSheet = false; showOpenRouterKeyDialog = true },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.Route, contentDescription = null) }
+                                        )
+
+                                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+
+                                        // ── AKUN ──
+                                        Text(
+                                            text = "Akun",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_pin)) },
+                                            onClick = { showSettingsSheet = false; showPinDialog = true },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.Pin, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_export_csv)) },
+                                            onClick = {
+                                                showSettingsSheet = false
+                                                exportCsvLauncher.launch("MoneyChat-rekap-${timestampForFile()}.csv")
+                                            },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.TableChart, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_backup_drive)) },
+                                            onClick = { showSettingsSheet = false; startDriveBackup() },
+                                            enabled = !backupBusy,
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_restore_drive)) },
+                                            onClick = { showSettingsSheet = false; startDriveRestore() },
+                                            enabled = !backupBusy,
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.CloudDownload, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.menu_clear_data)) },
+                                            onClick = { showSettingsSheet = false; showConfirmClearDialog = true },
+                                            leadingIcon = { Icon(imageVector = Icons.Rounded.Delete, contentDescription = null) }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = stringResource(R.string.menu_logout, userName ?: "User"),
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            },
+                                            onClick = {
+                                                com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+                                                firebaseReady = false
+                                                prefs.edit().clear().apply()
+                                                workspacePin = null
+                                                userName = null
+                                                geminiKey = null
+                                                openRouterKey = null
+                                                showSettingsSheet = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.height(20.dp))
+                                    }
+                                }
                             }
 
                             if (showGeminiKeyDialog) {

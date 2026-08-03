@@ -1,15 +1,21 @@
 package com.ngodingsendiri.moneychat.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -17,27 +23,34 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
+import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
+import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
+import kotlinx.coroutines.launch
 
 /** Format nominal untuk prefill kolom edit (angka bulat tanpa desimal). */
 private fun formatAmountInput(amount: Double): String =
@@ -56,7 +69,6 @@ fun AddTransactionDialog(
     var amountText by remember {
         mutableStateOf(transaction?.let { formatAmountInput(it.amount) } ?: "")
     }
-    // "Dicatat oleh" diisi otomatis dari akun yang sedang login (initialLoggedBy)
     var description by remember { mutableStateOf(transaction?.description ?: "") }
     val loggedBy = remember {
         transaction?.loggedBy ?: initialLoggedBy ?: "Bendahara"
@@ -81,171 +93,210 @@ fun AddTransactionDialog(
     }
     var expandedCategoryMenu by remember { mutableStateOf(false) }
 
-    Dialog(
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    fun dismiss() {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) onDismiss()
+        }
+    }
+
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        dragHandle = null,
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .padding(16.dp)
+                .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
         ) {
-            Column(
+            // Drag handle
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(if (isEdit) R.string.add_dialog_edit_title else R.string.add_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Type Toggle (Pengeluaran vs Pemasukan)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    FilterChip(
-                        selected = type == "PENGELUARAN",
-                        onClick = {
-                            type = "PENGELUARAN"
-                            if (selectedCategory == "Gaji & Pemasukan") selectedCategory = "Groceries & Sembako"
-                        },
-                        label = { Text(stringResource(R.string.add_type_expense)) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("add_dialog_expense_chip")
-                    )
-
-                    FilterChip(
-                        selected = type == "PEMASUKAN",
-                        onClick = {
-                            type = "PEMASUKAN"
-                            if (selectedCategory != "Gaji & Pemasukan") selectedCategory = "Gaji & Pemasukan"
-                        },
-                        label = { Text(stringResource(R.string.add_type_income)) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("add_dialog_income_chip")
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Amount Input
-                val amountVal = amountText.toDoubleOrNull() ?: 0.0
-                val isAmountInvalid = amountText.isNotBlank() && amountVal <= 0
-                OutlinedTextField(
-                    value = amountText,
-                    onValueChange = { amountText = it },
-                    label = { Text(stringResource(R.string.add_amount_label)) },
-                    placeholder = { Text(stringResource(R.string.add_amount_placeholder)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    isError = isAmountInvalid,
-                    supportingText = if (isAmountInvalid) {
-                        { Text(stringResource(R.string.add_amount_error)) }
-                    } else null,
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("add_dialog_amount_field"),
-                    singleLine = true
+                        .width(36.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
                 )
+            }
 
-                Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(if (isEdit) R.string.add_dialog_edit_title else R.string.add_dialog_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
 
-                // Description Input
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text(stringResource(R.string.add_desc_label)) },
-                    placeholder = { Text(stringResource(R.string.add_desc_placeholder)) },
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Type Toggle (Pengeluaran vs Pemasukan) — chip berwarna
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = type == "PENGELUARAN",
+                    onClick = {
+                        type = "PENGELUARAN"
+                        if (selectedCategory == "Gaji & Pemasukan") selectedCategory = "Groceries & Sembako"
+                    },
+                    label = { Text(stringResource(R.string.add_type_expense), fontWeight = FontWeight.Medium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ExpenseRedLight,
+                        selectedLabelColor = ExpenseRed,
+                    ),
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("add_dialog_desc_field"),
-                    singleLine = true
+                        .weight(1f)
+                        .testTag("add_dialog_expense_chip")
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                FilterChip(
+                    selected = type == "PEMASUKAN",
+                    onClick = {
+                        type = "PEMASUKAN"
+                        if (selectedCategory != "Gaji & Pemasukan") selectedCategory = "Gaji & Pemasukan"
+                    },
+                    label = { Text(stringResource(R.string.add_type_income), fontWeight = FontWeight.Medium) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = IncomeGreenLight,
+                        selectedLabelColor = IncomeGreen,
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("add_dialog_income_chip")
+                )
+            }
 
-                // Category Dropdown
-                ExposedDropdownMenuBox(
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Amount Input
+            val amountVal = amountText.toDoubleOrNull() ?: 0.0
+            val isAmountInvalid = amountText.isNotBlank() && amountVal <= 0
+            OutlinedTextField(
+                value = amountText,
+                onValueChange = { amountText = it },
+                label = { Text(stringResource(R.string.add_amount_label)) },
+                placeholder = { Text(stringResource(R.string.add_amount_placeholder)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = isAmountInvalid,
+                supportingText = if (isAmountInvalid) {
+                    { Text(stringResource(R.string.add_amount_error)) }
+                } else null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("add_dialog_amount_field"),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Description Input
+            OutlinedTextField(
+                value = description,
+                onValueChange = { description = it },
+                label = { Text(stringResource(R.string.add_desc_label)) },
+                placeholder = { Text(stringResource(R.string.add_desc_placeholder)) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("add_dialog_desc_field"),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Category Dropdown
+            ExposedDropdownMenuBox(
+                expanded = expandedCategoryMenu,
+                onExpandedChange = { expandedCategoryMenu = !expandedCategoryMenu },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedCategory,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(stringResource(R.string.add_category_label)) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategoryMenu) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable, true)
+                        .fillMaxWidth()
+                )
+
+                ExposedDropdownMenu(
                     expanded = expandedCategoryMenu,
-                    onExpandedChange = { expandedCategoryMenu = !expandedCategoryMenu },
-                    modifier = Modifier.fillMaxWidth()
+                    onDismissRequest = { expandedCategoryMenu = false }
                 ) {
-                    OutlinedTextField(
-                        value = selectedCategory,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text(stringResource(R.string.add_category_label)) },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategoryMenu) },
-                        modifier = Modifier
-                            .menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable, true)
-                            .fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedCategoryMenu,
-                        onDismissRequest = { expandedCategoryMenu = false }
-                    ) {
-                        categories.forEach { cat ->
-                            DropdownMenuItem(
-                                text = { Text(cat) },
-                                onClick = {
-                                    selectedCategory = cat
-                                    expandedCategoryMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Action Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.add_cancel))
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            val amountVal = amountText.toDoubleOrNull() ?: 0.0
-                            onConfirm(
-                                FinancialTransaction(
-                                    id = transaction?.id ?: 0,
-                                    type = type,
-                                    category = selectedCategory,
-                                    amount = amountVal,
-                                    description = description,
-                                    loggedBy = loggedBy,
-                                    timestamp = transaction?.timestamp ?: System.currentTimeMillis(),
-                                    chatMessageId = transaction?.chatMessageId,
-                                    cloudId = transaction?.cloudId
-                                )
-                            )
-                            onDismiss()
-                        },
-                        enabled = description.isNotBlank() && amountText.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                        modifier = Modifier.testTag("add_dialog_save_button")
-                    ) {
-                        Text(stringResource(R.string.add_save))
+                    categories.forEach { cat ->
+                        DropdownMenuItem(
+                            text = { Text(cat) },
+                            onClick = {
+                                selectedCategory = cat
+                                expandedCategoryMenu = false
+                            }
+                        )
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = ::dismiss,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(stringResource(R.string.add_cancel))
+                }
+
+                Button(
+                    onClick = {
+                        val finalAmount = amountText.toDoubleOrNull() ?: 0.0
+                        onConfirm(
+                            FinancialTransaction(
+                                id = transaction?.id ?: 0,
+                                type = type,
+                                category = selectedCategory,
+                                amount = finalAmount,
+                                description = description,
+                                loggedBy = loggedBy,
+                                timestamp = transaction?.timestamp ?: System.currentTimeMillis(),
+                                chatMessageId = transaction?.chatMessageId,
+                                cloudId = transaction?.cloudId
+                            )
+                        )
+                        onDismiss()
+                    },
+                    enabled = description.isNotBlank() && amountText.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("add_dialog_save_button"),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(stringResource(R.string.add_save), fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

@@ -9,6 +9,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -114,7 +117,13 @@ import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRedLight
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagExpenseBg
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagExpenseDark
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagIncomeBg
+import com.ngodingsendiri.moneychat.ui.theme.MoneyTagIncomeDark
 import kotlinx.coroutines.launch
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -889,6 +898,13 @@ fun ChatMessageBubble(
             }
         }
 
+        // State animasi swipe — bubble bergerak mengikuti jari lalu snap balik (spring)
+        val swipeOffsetX = remember { Animatable(0f) }
+        val haptic = LocalHapticFeedback.current
+        var hapticFired = remember { false }
+        val swipeScope = rememberCoroutineScope()
+        val swipeThresholdPx = with(androidx.compose.ui.platform.LocalDensity.current) { 60.dp.toPx() }
+
         Surface(
             shape = RoundedCornerShape(
                 topStart = 20.dp,
@@ -900,27 +916,46 @@ fun ChatMessageBubble(
             shadowElevation = if (isMe) 0.dp else 1.dp,
             modifier = Modifier
                 .widthIn(min = 60.dp, max = 300.dp)
+                .offset(x = with(androidx.compose.ui.platform.LocalDensity.current) { swipeOffsetX.value.toDp() })
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { onLongPress?.invoke() }
                 )
                 .then(
                     if (onReply != null) {
-                        // Geser bubble ke kanan untuk membalas (pola app chat modern)
                         Modifier.pointerInput(Unit) {
-                            var total = 0f
                             detectHorizontalDragGestures(
-                                onDragStart = { total = 0f },
+                                onDragStart = { hapticFired = false },
                                 onHorizontalDrag = { change, dragAmount ->
-                                    total += dragAmount
                                     change.consume()
+                                    // Hanya izinkan geser ke kanan (untuk balas)
+                                    val newOffset = (swipeOffsetX.value + dragAmount).coerceIn(0f, swipeThresholdPx * 1.2f)
+                                    swipeScope.launch { swipeOffsetX.snapTo(newOffset) }
+                                    // Haptic saat pertama kali melampaui threshold
+                                    if (swipeOffsetX.value >= swipeThresholdPx && !hapticFired) {
+                                        hapticFired = true
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
                                 },
-                                onDragEnd = { if (total > 70.dp.toPx()) onReply() }
+                                onDragEnd = {
+                                    if (swipeOffsetX.value >= swipeThresholdPx) {
+                                        onReply()
+                                    }
+                                    // Snap kembali ke posisi awal dengan spring
+                                    swipeScope.launch {
+                                        swipeOffsetX.animateTo(
+                                            0f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessMedium
+                                            )
+                                        )
+                                    }
+                                    hapticFired = false
+                                }
                             )
                         }
-                    } else {
-                        Modifier
-                    }
+                    } else Modifier
                 )
                 .testTag("chat_bubble_${message.id}")
         ) {
@@ -1025,36 +1060,41 @@ fun ChatMessageBubble(
                     )
                 }
 
-                // Financial Tag Badge inside message
+                // Financial Tag Badge inside message — warna pastel lebih lembut
                 if (message.isFinancial && message.detectedAmount != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val isIncome = message.detectedType == "PEMASUKAN"
-                    val tagBg = if (isIncome) if (isDark) Color(0xFF0F5223) else IncomeGreenLight else if (isDark) Color(0xFF8C1D18) else ExpenseRedLight
-                    val tagColor = if (isIncome) if (isDark) Color(0xFFC4EED0) else IncomeGreen else if (isDark) Color(0xFFF9DEDC) else ExpenseRed
+                    // Gunakan warna pastel khusus untuk tag (tidak mencolok)
+                    val tagBg = if (isIncome) {
+                        if (isDark) MoneyTagIncomeDark else MoneyTagIncomeBg
+                    } else {
+                        if (isDark) MoneyTagExpenseDark else MoneyTagExpenseBg
+                    }
+                    val tagColor = if (isIncome) IncomeGreen else ExpenseRed
 
                     val formatRp = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
                         maximumFractionDigits = 0
                     }.format(message.detectedAmount)
 
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = tagBg,
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
                                 imageVector = if (isIncome) Icons.Rounded.CheckCircle else Icons.Rounded.Receipt,
                                 contentDescription = null,
                                 tint = tagColor,
-                                modifier = Modifier.size(14.dp)
+                                modifier = Modifier.size(13.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "${if (isIncome) "+ " else "- "}$formatRp (${message.detectedCategory})",
+                                text = "${if (isIncome) "+" else "-"} $formatRp · ${message.detectedCategory}",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.Medium,
                                 color = tagColor
                             )
                         }

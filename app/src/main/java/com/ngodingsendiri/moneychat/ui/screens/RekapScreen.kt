@@ -44,10 +44,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DismissDirection
+import androidx.compose.material3.DismissValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,8 +58,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -83,6 +89,12 @@ import com.ngodingsendiri.moneychat.ui.theme.HusbandBlue
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreen
 import com.ngodingsendiri.moneychat.ui.theme.IncomeGreenLight
 import com.ngodingsendiri.moneychat.ui.theme.WifePink
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -683,7 +695,7 @@ fun CategoryProgressRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TransactionItemCard(
     transaction: FinancialTransaction,
@@ -712,103 +724,143 @@ fun TransactionItemCard(
         else -> stringResource(R.string.tag_other, transaction.loggedBy)
     }
 
-    // Long-press membuka menu aksi cepat (Edit / Hapus)
-    var menuOpen by remember { mutableStateOf(false) }
+    // SwipeToDismissBox: swipe kiri → Delete, swipe kanan → Edit
+    val swipeState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { dismissValue ->
+            when (dismissValue) {
+                SwipeToDismissBoxValue.EndToStart -> {
+                    onDelete()
+                    false // false = jangan auto-dismiss, konfirmasi via dialog
+                }
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEdit()
+                    false
+                }
+                else -> false
+            }
+        },
+        positionalThreshold = { totalDistance -> totalDistance * 0.35f }
+    )
 
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(16.dp),
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = {},
-                onLongClick = { menuOpen = true }
-            )
-            .testTag("transaction_item_${transaction.id}")
-    ) {
-        DropdownMenu(
-            expanded = menuOpen,
-            onDismissRequest = { menuOpen = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.rekap_edit_desc)) },
-                leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                onClick = { menuOpen = false; onEdit() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.action_delete)) },
-                leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
-                onClick = { menuOpen = false; onDelete() }
-            )
+    // Reset state setelah aksi dipicu (biar item tidak menghilang)
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(swipeState.currentValue) {
+        if (swipeState.currentValue != SwipeToDismissBoxValue.Settled) {
+            scope.launch { swipeState.reset() }
         }
-        Row(
+    }
+
+    SwipeToDismissBox(
+        state = swipeState,
+        modifier = modifier,
+        enableDismissFromStartToEnd = true,  // kanan → Edit
+        enableDismissFromEndToStart = true,  // kiri → Delete
+        backgroundContent = {
+            // Latar belakang yang terungkap saat swipe
+            val direction = swipeState.dismissDirection
+            val isToDelete = direction == SwipeToDismissBoxValue.EndToStart
+            val isToEdit = direction == SwipeToDismissBoxValue.StartToEnd
+            val bgColor = when {
+                isToDelete -> ExpenseRed.copy(alpha = 0.12f)
+                isToEdit -> MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
+                else -> Color.Transparent
+            }
+            val icon = if (isToDelete) Icons.Rounded.Delete else Icons.Rounded.Edit
+            val iconTint = if (isToDelete) ExpenseRed else MaterialTheme.colorScheme.primary
+            val align = if (isToDelete) Alignment.CenterEnd else Alignment.CenterStart
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(bgColor),
+                contentAlignment = align
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp)
+                        .size(24.dp)
+                )
+            }
+        }
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .testTag("transaction_item_${transaction.id}")
         ) {
             Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isIncome) IncomeGreenLight else ExpenseRedLight),
-                    contentAlignment = Alignment.Center
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = getCategoryIcon(transaction.category),
-                        contentDescription = null,
-                        tint = if (isIncome) IncomeGreen else ExpenseRed,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = transaction.description,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(if (isIncome) IncomeGreenLight else ExpenseRedLight),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = transaction.category,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false)
+                        Icon(
+                            imageVector = getCategoryIcon(transaction.category),
+                            contentDescription = null,
+                            tint = if (isIncome) IncomeGreen else ExpenseRed,
+                            modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = " • ",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                        Text(
-                            text = loggedByTag,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (transaction.loggedBy == "ISTRI" || transaction.loggedBy == "Anggota") WifePink else HusbandBlue,
-                            fontWeight = FontWeight.Medium,
+                            text = transaction.description,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = transaction.category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Text(
+                                text = " · ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                            Text(
+                                text = loggedByTag,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (transaction.loggedBy == "ISTRI" || transaction.loggedBy == "Anggota") WifePink else HusbandBlue,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                     }
                 }
-            }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "$amountPrefix${currencyFormat.format(transaction.amount)}",
@@ -822,23 +874,6 @@ fun TransactionItemCard(
                         text = dateFormat.format(Date(transaction.timestamp)),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-                Spacer(modifier = Modifier.width(2.dp))
-                IconButton(onClick = onEdit) {
-                    Icon(
-                        imageVector = Icons.Rounded.Edit,
-                        contentDescription = stringResource(R.string.rekap_edit_desc),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Rounded.Delete,
-                        contentDescription = stringResource(R.string.action_delete),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                        modifier = Modifier.size(18.dp)
                     )
                 }
             }

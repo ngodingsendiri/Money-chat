@@ -11,6 +11,7 @@ import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 import com.ngodingsendiri.moneychat.data.local.TransactionDao
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -52,6 +53,9 @@ object FirestoreSyncManager {
 
     private const val TAG = "FirestoreSync"
     private const val COLLECTION_FAMILIES = "families"
+    /** Delay awal untuk retry — berlipat dua setiap percobaan (max 32 detik). */
+    private const val MIN_RETRY_DELAY_MS = 1_000L
+    private const val MAX_RETRY_DELAY_MS = 32_000L
 
     @Volatile private var familyId: String = ""
     @Volatile private var chatDao: ChatMessageDao? = null
@@ -96,7 +100,13 @@ object FirestoreSyncManager {
     private fun listenMessages() {
         messagesListener = messagesRef().addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.w(TAG, "Listen messages gagal: ${error.message}")
+                Log.w(TAG, "Listen messages gagal: ${error.message}. Retry dengan backoff...")
+                // Hapus listener yang error, lalu jadwalkan retry dengan exponential backoff
+                messagesListener?.remove()
+                messagesListener = null
+                CoroutineScope(Dispatchers.IO).launch {
+                    retryWithBackoff(label = "messages", action = ::listenMessages)
+                }
                 return@addSnapshotListener
             }
             snapshot ?: return@addSnapshotListener
@@ -121,7 +131,12 @@ object FirestoreSyncManager {
     private fun listenTransactions() {
         transactionsListener = transactionsRef().addSnapshotListener { snapshot, error ->
             if (error != null) {
-                Log.w(TAG, "Listen transactions gagal: ${error.message}")
+                Log.w(TAG, "Listen transactions gagal: ${error.message}. Retry dengan backoff...")
+                transactionsListener?.remove()
+                transactionsListener = null
+                CoroutineScope(Dispatchers.IO).launch {
+                    retryWithBackoff(label = "transactions", action = ::listenTransactions)
+                }
                 return@addSnapshotListener
             }
             snapshot ?: return@addSnapshotListener
@@ -141,6 +156,19 @@ object FirestoreSyncManager {
                 }
             }
         }
+    }
+
+    /**
+     * Menunggu dengan exponential backoff sebelum memanggil ulang [action].
+     * Backoff: 1s → 2s → 4s → 8s → 16s → 32s (cap).
+     * Berhenti otomatis jika familyId kosong (listener sudah di-stop via logout).
+     */
+    private suspend fun retryWithBackoff(label: String, delayMs: Long = MIN_RETRY_DELAY_MS, action: () -> Unit) {
+        if (familyId.isEmpty()) return // sudah logout, jangan retry
+        Log.d(TAG, "[$label] Retry dalam ${delayMs / 1000}s...")
+        delay(delayMs)
+        if (familyId.isEmpty()) return
+        action()
     }
 
     private suspend fun upsertMessage(dao: ChatMessageDao, c: CloudMessage) {
