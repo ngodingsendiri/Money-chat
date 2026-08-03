@@ -15,10 +15,13 @@
 .cxx
 local.properties
 .env
-debug.keystore
 my-upload-key.jks
 *.jks
 /dist
+
+# debug.keystore sengaja DI-COMMIT (SHA-1 stabil untuk Google Sign-In).
+# Jangan tambahkan ke .gitignore.
+!debug.keystore
 
 # Keystore release & backup creds (JANGAN PERNAH DI-COMMIT)
 *.jks

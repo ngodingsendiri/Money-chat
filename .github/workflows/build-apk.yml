@@ -36,14 +36,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Generate debug keystore
-        # app/build.gradle.kts menandatangani build debug dengan ${rootDir}/debug.keystore
-        run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android -keypass android \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+      # debug.keystore DI-COMMIT di repo (lihat app/build.gradle.kts). Penting:
+      # keystore harus STABEL antar build supaya SHA-1 penandatangan sama setiap
+      # kali — kalau berubah, Google Sign-In Firebase menolak APK
+      # ("gagal login"). Jangan ganti/hapus debug.keystore.
 
       - name: Read version
         id: version

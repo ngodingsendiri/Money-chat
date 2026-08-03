@@ -1,7 +1,7 @@
 # 💬 Money Chat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-1.2.3-brightgreen)
+![Versi](https://img.shields.io/badge/versi-1.2.4-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Money Chat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -14,9 +14,9 @@
 
 | Versi | File | Link |
 |---|---|---|
-| **v1.2.3** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
+| **v1.2.4** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
 | Semua versi | — | [Daftar Release](https://github.com/ngodingsendiri/Money-chat/releases) |
-| Build mentah (artifact) | `MoneyChat-v1.2.3-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
+| Build mentah (artifact) | `MoneyChat-v1.2.4-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
 
 **Cara install:**
 1. Unduh APK dari link di atas (via HP langsung atau kirim ke HP).
@@ -58,6 +58,36 @@ Aplikasi **tidak butuh API key apa pun untuk dijalankan** — semua fitur AI pun
 > 💡 **Buat developer**: key bawaan app bisa dibakar lewat env saat build —
 > - `OPENROUTER_API_KEY` → `BuildConfig.OPENROUTER_API_KEY`
 > - `GEMINI_API_KEY` (via Secrets Gradle Plugin / `.env`) → `BuildConfig.GEMINI_API_KEY`
+
+---
+
+## 🔐 Setup Google Sign-In (WAJIB biar login jalan)
+
+Login Google gagal ("gagal login" / "Google Sign-In belum dikonfigurasi") hampir selalu karena **salah satu dari 3 hal ini belum beres di Firebase Console** — bukan karena kode app. Cek satu per satu:
+
+1. **Provider Google aktif** → Firebase Console → project **chat-keuangan** → *Build → Authentication → Sign-in method* → **Google → Aktifkan** → simpan.
+2. **SHA-1 penandatangan terdaftar** → *Project settings → Aplikasi Anda* → klik app `com.ngodingsendiri.moneychat` → **Tambahkan sidik jari** (SHA-1). **Ini penyebab paling umum**: setiap APK menandatangani dengan kunci berbeda, dan Firebase menolak app yang SHA-1-nya tidak terdaftar.
+3. **google-services.json masih cocok** → pastikan file `app/google-services.json` yang lama masih valid; kalau ragu, unduh ulang dari Firebase Console dan ganti.
+
+### SHA-1 yang harus didaftarkan (kode app pakai ini)
+
+| APK | Keystore | SHA-1 yang harus didaftarkan |
+|---|---|---|
+| **Debug** (dari CI/artifak, sudah stabil sejak v1.2.4) | `debug.keystore` (DI-COMMIT di repo — jangan diganti) | `B5:9D:30:B8:D8:A0:BE:78:1D:D4:89:F6:73:B1:22:C1:45:59:03:B1` |
+| **Release** (bertanda tangan) | keystore `upload` kamu (secret `KEYSTORE_BASE64`) | lihat perintah di bawah ↓ |
+
+> 🔑 **Kenapa SHA-1 debug stabil sejak v1.2.4?** Sebelumnya GitHub Actions membuat `debug.keystore` **acak baru setiap build**, jadi SHA-1 berubah terus dan Google Sign-In selalu ditolak. Sekarang `debug.keystore` di-commit ke repo — SHA-1 selalu sama, cukup didaftarkan **sekali** di Firebase Console dan semua build berikutnya (debug & CI) langsung bisa login.
+
+### Cek SHA-1 keystore release kamu sendiri
+
+```bash
+# Keystore upload kamu (file .jks / dari secret KEYSTORE_BASE64)
+keytool -exportcert -keystore my-upload-key.jks -alias upload -storepass PASSWORD | sha1sum
+# atau kalau mau format dua-titik yang sama seperti Firebase:
+keytool -list -v -keystore my-upload-key.jks -storepass PASSWORD | grep SHA1
+```
+
+Salin SHA-1-nya ke Firebase Console (poin 2 di atas). Kalau kamu belum punya keystore release, cukup pakai APK **debug** dari Release — login tetap jalan karena `debug.keystore` sudah didaftarkan.
 
 ---
 
@@ -148,4 +178,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.2.3**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.2.4**

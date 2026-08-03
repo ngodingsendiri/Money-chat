@@ -15,8 +15,8 @@ android {
     applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 8
-    versionName = "1.2.3"
+    versionCode = 9
+    versionName = "1.2.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
@@ -30,8 +30,15 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
+    // debug.keystore DI-COMMIT ke repo (PKCS12, password android, alias
+    // androiddebugkey) supaya SHA-1 penandatangan DEBUG STABEL di semua build
+    // (lokal maupun GitHub Actions). Sebelumnya CI membuat keystore acak baru
+    // tiap build -> SHA-1 berubah-ubah -> Google Sign-In Firebase menolak app
+    // dengan "gagal login". Dengan SHA-1 tetap, daftarkan sekali di Firebase
+    // Console -> Pengaturan project -> Aplikasi Android -> SHA-1.
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
+      storeType = "PKCS12"
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"

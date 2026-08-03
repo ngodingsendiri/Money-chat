@@ -34,6 +34,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -137,6 +138,15 @@ fun PinConnectScreen(
                 }
             } catch (e: GetCredentialCancellationException) {
                 // User membatalkan dialog Google — bukan error, biarkan tenang.
+            } catch (e: GetCredentialException) {
+                // Google Play Services menolak request (mis. SHA-1/package belum
+                // terdaftar di Firebase Console, atau app tidak dipercaya). Kode
+                // 10/15 = "Developer console is not set up correctly" — artinya
+                // sidik jari penandatangan belum terdaftar, bukan provider mati.
+                authError = context.getString(
+                    R.string.google_err_credential_provider,
+                    e.type
+                )
             } catch (e: FirebaseAuthException) {
                 // Tampilkan penyebab sebenarnya supaya user tahu harus apa.
                 authError = when (e.errorCode) {
