@@ -149,6 +149,44 @@ class FinanceRepository(
         }
     }
 
+    /**
+     * Restore: ganti seluruh data lokal + cloud dengan isi backup.
+     * Id lokal dibuat ulang; relasi transaksi -> pesan chat dijaga lewat
+     * pemetaan id lama -> id baru. Semua record lalu di-push ke Firestore
+     * supaya perangkat lain di workspace ikut menerima hasil restore.
+     */
+    suspend fun restoreBackup(messages: List<ChatMessage>, transactions: List<FinancialTransaction>) {
+        withContext(Dispatchers.IO) {
+            chatMessageDao.deleteAllMessages()
+            transactionDao.deleteAllTransactions()
+
+            val idMap = mutableMapOf<Long, Long>()
+            messages.forEach { m ->
+                val newId = chatMessageDao.insertMessage(m.copy(id = 0))
+                idMap[m.id] = newId
+            }
+
+            transactions.forEach { t ->
+                transactionDao.insertTransaction(
+                    t.copy(id = 0, chatMessageId = t.chatMessageId?.let { idMap[it] })
+                )
+            }
+
+            transactions.forEach { t ->
+                t.cloudId?.let {
+                    FirestoreSyncManager.syncTransaction(
+                        t.copy(chatMessageId = t.chatMessageId?.let { oldId -> idMap[oldId] })
+                    )
+                }
+            }
+            messages.forEach { m ->
+                m.cloudId?.let {
+                    FirestoreSyncManager.syncMessage(m.copy(id = idMap[m.id] ?: m.id))
+                }
+            }
+        }
+    }
+
 
     suspend fun getFrequentTransactionSuggestions(transactions: List<FinancialTransaction>): List<String> {
         return GeminiService.generateFrequentTransactionSuggestions(transactions)

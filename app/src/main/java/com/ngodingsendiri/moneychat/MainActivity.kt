@@ -5,7 +5,9 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -18,6 +20,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,31 +28,36 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Route
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Key
-import androidx.compose.material.icons.rounded.Route
-import androidx.compose.material.icons.rounded.SystemUpdate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -71,6 +79,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -78,6 +87,9 @@ import androidx.core.content.FileProvider
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ngodingsendiri.moneychat.R
+import com.ngodingsendiri.moneychat.data.backup.DriveBackupFile
+import com.ngodingsendiri.moneychat.data.backup.DriveBackupManager
+import com.ngodingsendiri.moneychat.data.backup.DriveConsentRequired
 import com.ngodingsendiri.moneychat.ui.MainViewModel
 import com.ngodingsendiri.moneychat.ui.screens.AddTransactionDialog
 import com.ngodingsendiri.moneychat.ui.screens.AiReportDialog
@@ -87,6 +99,9 @@ import com.ngodingsendiri.moneychat.data.remote.GitHubRelease
 import com.ngodingsendiri.moneychat.data.remote.GitHubUpdateChecker
 import com.ngodingsendiri.moneychat.ui.theme.CoupleFinanceTheme
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -141,6 +156,14 @@ class MainActivity : ComponentActivity() {
                 var geminiKey by remember { mutableStateOf(prefs.getString("gemini_api_key", null)) }
                 var openRouterKey by remember { mutableStateOf(prefs.getString("openrouter_api_key", null)) }
 
+                // ---- State Export CSV & Backup Google Drive ----
+                var backupBusy by remember { mutableStateOf(false) }
+                var backupMessage by remember { mutableStateOf<String?>(null) }
+                var driveConsentIntent by remember { mutableStateOf<Intent?>(null) }
+                var pendingDriveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+                var restoreBackups by remember { mutableStateOf<List<DriveBackupFile>?>(null) }
+                var restoreTarget by remember { mutableStateOf<DriveBackupFile?>(null) }
+
                 LaunchedEffect(workspacePin, userName) {
                     val pin = workspacePin
                     if (pin != null) {
@@ -168,6 +191,125 @@ class MainActivity : ComponentActivity() {
                             if (GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
                                 updateInfo = release
                             }
+                        }
+                    }
+                }
+
+                // Launcher konsen OAuth Drive (muncul sekali; setelah disetujui
+                // aksi diulang otomatis). Kalau user menekan Batal (bukan OK),
+                // aksi tidak diulang supaya tidak muncul dialog berulang-ulang.
+                val consentLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult()
+                ) { result ->
+                    if (result.resultCode == android.app.Activity.RESULT_OK) {
+                        pendingDriveAction?.invoke()
+                    } else {
+                        backupMessage = context.getString(R.string.drive_consent_cancelled)
+                    }
+                    pendingDriveAction = null
+                }
+                LaunchedEffect(driveConsentIntent) {
+                    driveConsentIntent?.let {
+                        driveConsentIntent = null
+                        consentLauncher.launch(it)
+                    }
+                }
+
+                // Launcher simpan CSV via Storage Access Framework (pilih folder, biasanya Download)
+                val exportCsvLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("text/csv")
+                ) { uri ->
+                    if (uri != null) {
+                        scope.launch {
+                            val csv = viewModel.exportRecapCsv()
+                            val ok = runCatching {
+                                context.contentResolver.openOutputStream(uri)?.use { out ->
+                                    out.write(csv.toByteArray(Charsets.UTF_8))
+                                }
+                            }.isSuccess
+                            backupMessage = context.getString(
+                                if (ok) R.string.export_csv_success else R.string.export_csv_failed
+                            )
+                        }
+                    }
+                }
+
+                // Ambil token Drive; kalau butuh persetujuan, tampilkan Intent lalu ulangi aksinya.
+                suspend fun driveToken(context: Context, retry: () -> Unit): String? {
+                    val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                    if (email == null) {
+                        backupMessage = context.getString(R.string.drive_err_not_signed_in)
+                        return null
+                    }
+                    return try {
+                        DriveBackupManager.getAccessToken(context, email)
+                    } catch (e: DriveConsentRequired) {
+                        driveConsentIntent = e.intent
+                        pendingDriveAction = retry
+                        null
+                    } catch (e: Exception) {
+                        backupMessage = context.getString(
+                            R.string.drive_err_token, e.message ?: e.javaClass.simpleName
+                        )
+                        null
+                    }
+                }
+
+                fun startDriveBackup() {
+                    scope.launch {
+                        backupBusy = true
+                        try {
+                            val token = driveToken(context) { startDriveBackup() } ?: return@launch
+                            val json = viewModel.buildBackupJson()
+                            val fileName = "MoneyChat-backup-${timestampForFile()}.json"
+                            val ok = DriveBackupManager.uploadBackup(context, token, fileName, json)
+                            if (ok) {
+                                DriveBackupManager.pruneOldBackups(context, token, 5)
+                                backupMessage = context.getString(R.string.backup_success, fileName)
+                            } else {
+                                backupMessage = context.getString(R.string.backup_failed)
+                            }
+                        } finally {
+                            backupBusy = false
+                        }
+                    }
+                }
+
+                fun startDriveRestore() {
+                    scope.launch {
+                        backupBusy = true
+                        try {
+                            val token = driveToken(context) { startDriveRestore() } ?: return@launch
+                            val files = DriveBackupManager.listBackups(context, token)
+                            if (files.isEmpty()) {
+                                backupMessage = context.getString(R.string.restore_no_backup)
+                            } else {
+                                restoreBackups = files.take(5)
+                            }
+                        } finally {
+                            backupBusy = false
+                        }
+                    }
+                }
+
+                fun confirmRestore(file: DriveBackupFile) {
+                    scope.launch {
+                        backupBusy = true
+                        try {
+                            val token = driveToken(context) { confirmRestore(file) } ?: return@launch
+                            val json = DriveBackupManager.downloadBackup(context, token, file.fileId)
+                            if (json == null) {
+                                backupMessage = context.getString(R.string.restore_failed)
+                                return@launch
+                            }
+                            val ok = viewModel.restoreFromJson(json)
+                            backupMessage = context.getString(
+                                if (ok) R.string.restore_success else R.string.restore_failed_parse
+                            )
+                        } finally {
+                            backupBusy = false
+                            restoreBackups = null
+                            restoreTarget = null
                         }
                     }
                 }
@@ -281,6 +423,49 @@ class MainActivity : ComponentActivity() {
                                                     leadingIcon = {
                                                         Icon(
                                                             imageVector = Icons.Rounded.SystemUpdate,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_export_csv)) },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        exportCsvLauncher.launch(
+                                                            "MoneyChat-rekap-${timestampForFile()}.csv"
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.TableChart,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_backup_drive)) },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        startDriveBackup()
+                                                    },
+                                                    enabled = !backupBusy,
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.CloudUpload,
+                                                            contentDescription = null
+                                                        )
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_restore_drive)) },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        startDriveRestore()
+                                                    },
+                                                    enabled = !backupBusy,
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.CloudDownload,
                                                             contentDescription = null
                                                         )
                                                     }
@@ -536,6 +721,91 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    // ---- Dialog Export CSV / Backup / Restore Drive ----
+                    if (backupBusy) {
+                        AlertDialog(
+                            onDismissRequest = {},
+                            title = { Text(stringResource(R.string.backup_progress)) },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Text(
+                                        stringResource(R.string.backup_please_wait),
+                                        fontSize = 13.5.sp
+                                    )
+                                }
+                            },
+                            confirmButton = {}
+                        )
+                    }
+
+                    backupMessage?.let { msg ->
+                        AlertDialog(
+                            onDismissRequest = { backupMessage = null },
+                            title = { Text(stringResource(R.string.backup_info_title)) },
+                            text = { Text(msg) },
+                            confirmButton = {
+                                TextButton(onClick = { backupMessage = null }) {
+                                    Text(stringResource(R.string.action_ok))
+                                }
+                            }
+                        )
+                    }
+
+                    restoreBackups?.let { files ->
+                        AlertDialog(
+                            onDismissRequest = { restoreBackups = null },
+                            title = { Text(stringResource(R.string.restore_pick_title)) },
+                            text = {
+                                Column {
+                                    Text(
+                                        stringResource(R.string.restore_pick_hint),
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    files.forEach { f ->
+                                        TextButton(
+                                            onClick = { restoreTarget = f },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = f.name,
+                                                fontWeight = FontWeight.SemiBold,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { restoreBackups = null }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
+                        )
+                    }
+
+                    restoreTarget?.let { f ->
+                        AlertDialog(
+                            onDismissRequest = { restoreTarget = null },
+                            title = { Text(stringResource(R.string.restore_confirm_title)) },
+                            text = { Text(stringResource(R.string.restore_confirm_message, f.name)) },
+                            confirmButton = {
+                                TextButton(onClick = { confirmRestore(f) }) {
+                                    Text(stringResource(R.string.action_restore))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { restoreTarget = null }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -622,6 +892,10 @@ fun ApiKeyDialog(
         }
     )
 }
+
+/** Nama file dengan timestamp: 20260803-143000 */
+private fun timestampForFile(): String =
+    SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
 
 /** Buka intent install untuk APK hasil unduhan (via FileProvider). */
 private fun installApk(context: Context, file: File) {

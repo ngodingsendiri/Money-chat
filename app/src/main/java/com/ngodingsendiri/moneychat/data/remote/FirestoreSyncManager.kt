@@ -152,6 +152,11 @@ object FirestoreSyncManager {
                 detectedAmount = c.detectedAmount,
                 detectedCategory = c.detectedCategory,
                 detectedType = c.detectedType,
+                // Foto lampiran (imagePath) TIDAK dikirim ke cloud — file foto
+                // hanya ada di perangkat yang mengirimnya. Pertahankan path
+                // lokal supaya bubble foto nota tidak hilang saat listener
+                // Firestore mem-merge dokumen yang sama (mis. setelah restore).
+                imagePath = existing.imagePath,
                 cloudId = c.cloudId
             )
         } else {

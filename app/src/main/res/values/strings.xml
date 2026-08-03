@@ -161,4 +161,28 @@
     <string name="update_check_title">Periksa Update</string>
     <string name="update_no_update">Aplikasi sudah versi terbaru ✅</string>
     <string name="action_ok">OK</string>
+
+    <!-- Export CSV & Backup Google Drive -->
+    <string name="menu_export_csv">Export Rekapan (CSV)</string>
+    <string name="menu_backup_drive">Backup ke Google Drive</string>
+    <string name="menu_restore_drive">Restore dari Google Drive</string>
+    <string name="export_csv_success">File CSV rekapan berhasil dibuat. Buka dengan Excel/Google Sheets untuk melihat tabel rekapannya.</string>
+    <string name="export_csv_failed">Gagal menyimpan file CSV. Coba lagi.</string>
+    <string name="backup_success">Backup berhasil diunggah ke Google Drive:\n%1$s\n(berisi riwayat chat &amp; transaksi)</string>
+    <string name="backup_failed">Backup gagal diunggah ke Google Drive. Periksa koneksi internet lalu coba lagi.</string>
+    <string name="backup_progress">Memproses…</string>
+    <string name="backup_please_wait">Menyiapkan data &amp; menghubungkan Google Drive, mohon tunggu…</string>
+    <string name="backup_info_title">Informasi</string>
+    <string name="drive_err_not_signed_in">Kamu belum masuk dengan akun Google. Masuk dulu di layar awal, lalu coba lagi.</string>
+    <string name="drive_err_token">Tidak bisa mendapatkan akses Google Drive: %1$s</string>
+    <string name="drive_consent_cancelled">Akses Google Drive dibatalkan. Izinkan saat diminta untuk memakai fitur backup/restore.</string>
+    <string name="restore_no_backup">Belum ada backup di Google Drive. Jalankan "Backup ke Google Drive" dulu.</string>
+    <string name="restore_pick_title">Pilih Backup</string>
+    <string name="restore_pick_hint">Pilih file backup untuk dipulihkan (5 terbaru):</string>
+    <string name="restore_confirm_title">Pulihkan Backup?</string>
+    <string name="restore_confirm_message">Semua data saat ini (chat &amp; transaksi) akan diganti dengan isi backup "%1$s". Lanjut?</string>
+    <string name="action_restore">Pulihkan</string>
+    <string name="restore_success">Backup berhasil dipulihkan! Semua chat &amp; transaksi sudah dikembalikan dan disinkronkan ke perangkat lain.</string>
+    <string name="restore_failed">Gagal mengunduh backup dari Google Drive.</string>
+    <string name="restore_failed_parse">File backup tidak valid atau rusak.</string>
 </resources>

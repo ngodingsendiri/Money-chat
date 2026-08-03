@@ -1,7 +1,7 @@
 # 💬 Money Chat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-1.2.8-brightgreen)
+![Versi](https://img.shields.io/badge/versi-1.2.9-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Money Chat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -14,9 +14,9 @@
 
 | Versi | File | Link |
 |---|---|---|
-| **v1.2.8** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
+| **v1.2.9** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
 | Semua versi | — | [Daftar Release](https://github.com/ngodingsendiri/Money-chat/releases) |
-| Build mentah (artifact) | `MoneyChat-v1.2.8-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
+| Build mentah (artifact) | `MoneyChat-v1.2.9-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
 
 **Cara install:**
 1. Unduh APK dari link di atas (via HP langsung atau kirim ke HP).
@@ -38,6 +38,8 @@
 - 🧾 **Analisis AI finansial** — evaluasi kesehatan arus kas + rekomendasi strategis
 - ⚡ **Saran cepat** — chip rekomendasi transaksi berdasarkan kebiasaan pengguna
 - 📷 **Foto nota belanja** — lampirkan foto nota/struk (kamera atau galeri), AI vision membacanya & langsung mencatat totalnya
+- 📤 **Export rekapan CSV** — *Pengaturan → Export Rekapan (CSV)* → simpan file yang pas dibuka di Excel/Google Sheets jadi tabel rapi (ringkasan, rekap per kategori, riwayat transaksi, riwayat chat)
+- ☁️ **Backup & restore Google Drive** — *Pengaturan → Backup/Restore* → cadangan lengkap (chat + transaksi) di folder privat Drive app, otomatis menyisakan 5 backup terbaru; restore mengembalikan & menyinkronkan ke perangkat lain
 - 🔗 **PIN bisa disalin** — sekali ketuk PIN tersalin ke clipboard, gampang dibagikan ke pasangan
 - 🔄 **Workspace bersama (PIN)** — beberapa perangkat bisa saling terhubung via PIN unik
 - 👥 **Peran anggota** — Bendahara / Anggota / Ketua (atau Suami / Istri)
@@ -169,9 +171,10 @@ Setiap push ke `main` atau tag `v*` otomatis menjalankan workflow **Build APK**:
 
 ## 🗺️ Roadmap
 
+- [x] Backup & restore data (Google Drive, v1.2.9)
+- [x] Export rekap CSV (v1.2.9)
 - [ ] Aktifkan sinkronisasi Firebase Firestore antar perangkat
 - [ ] APK release bertanda tangan di CI (siap upload Play Store)
-- [ ] Backup & restore data
 - [ ] Grafik bulanan & notifikasi pengingat
 
 ---
@@ -182,4 +185,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.2.8**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.2.9**

@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.ngodingsendiri.moneychat.BuildConfig
+import com.ngodingsendiri.moneychat.data.backup.DataExporter
 import com.ngodingsendiri.moneychat.data.local.AppDatabase
 import com.ngodingsendiri.moneychat.data.local.ChatMessage
 import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
@@ -157,7 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 description = description,
                 loggedBy = loggedBy
             )
-            
+
                 try {
                     repository.addManualTransaction(trans)
                 } catch (e: Exception) {
@@ -168,7 +170,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteTransaction(transaction: FinancialTransaction) {
         viewModelScope.launch {
-            
+
             try {
                 repository.deleteTransaction(transaction)
             } catch (e: Exception) {
@@ -211,12 +213,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAllData() {
         viewModelScope.launch {
-            
+
             try {
                 repository.clearAllData()
             } catch (e: Exception) {
                 Log.w("MainViewModel", "Operasi gagal", e)
             }
+        }
+    }
+
+    // ---------- Export & Backup ----------
+
+    /** CSV rekap keuangan (transaksi + riwayat chat) untuk diekspor. */
+    fun exportRecapCsv(): String =
+        DataExporter.buildRecapCsv(transactions.value, messages.value)
+
+    /** JSON backup lengkap untuk Google Drive. */
+    fun buildBackupJson(): String =
+        DataExporter.buildBackupJson(transactions.value, messages.value, BuildConfig.VERSION_NAME)
+
+    /** Restore dari JSON backup. Return true kalau berhasil. */
+    suspend fun restoreFromJson(json: String): Boolean {
+        val data = DataExporter.parseBackupJson(json) ?: return false
+        return try {
+            repository.restoreBackup(data.messages, data.transactions)
+            true
+        } catch (e: Exception) {
+            Log.w("MainViewModel", "Restore gagal", e)
+            false
         }
     }
 }
