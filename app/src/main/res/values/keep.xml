@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resource Firebase dibaca secara dinamis (Resources.getIdentifier) oleh app
+  (default_web_client_id di PinConnectScreen) dan SDK Firebase (google_app_id,
+  google_api_key, dll.). Pemakaian dinamis tidak terdeteksi resource shrinker
+  sehingga resource bisa hilang dari APK release — khususnya default_web_client_id,
+  yang membuat login Google gagal dengan pesan "Google Sign-In belum dikonfigurasi".
+  tools:keep memastikan semua resource berikut selalu dipertahankan.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@string/default_web_client_id,@string/google_app_id,@string/google_api_key,@string/gcm_defaultSenderId,@string/google_storage_bucket,@string/project_id" />

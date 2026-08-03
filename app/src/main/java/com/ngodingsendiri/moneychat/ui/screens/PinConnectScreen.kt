@@ -74,8 +74,8 @@ fun PinConnectScreen(
     // R.string.default_web_client_id (bukan getIdentifier) supaya resource shrinker
     // otomatis mempertahankannya di APK release — getIdentifier() tidak terdeteksi
     // AGP sehingga resource bisa hilang dan login Google gagal dengan pesan
-    // "Google Sign-In belum dikonfigurasi". (Cadangan juga di
-    // androidResources.keepSpecificResources di app/build.gradle.kts.)
+    // "Google Sign-In belum dikonfigurasi". (Cadangan: tools:keep di
+    // app/src/main/res/values/keep.xml.)
     val webClientId = remember {
         runCatching { context.getString(R.string.default_web_client_id) }.getOrNull()
     }

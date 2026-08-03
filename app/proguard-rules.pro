@@ -22,7 +22,7 @@
 # CATATAN: opsi "-keepresources" adalah milik ProGuard dan TIDAK dikenali R8
 # (build release gagal dengan "R8: Unknown option"). Resource Firebase
 # (default_web_client_id dkk.) dipertahankan lewat dua mekanisme yang valid:
-#   1. androidResources.keepSpecificResources di app/build.gradle.kts
+#   1. app/src/main/res/values/keep.xml (tools:keep) untuk semua resource Firebase
 #   2. PinConnectScreen membaca default_web_client_id via referensi statis
 #      R.string.default_web_client_id (bukan getIdentifier), sehingga resource
 #      shrinker otomatis menyimpannya di APK release.

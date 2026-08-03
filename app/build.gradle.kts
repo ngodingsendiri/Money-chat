@@ -15,8 +15,8 @@ android {
     applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.2.2"
+    versionCode = 8
+    versionName = "1.2.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
@@ -52,16 +52,9 @@ android {
   // yang tidak terdeteksi resource shrinker. Tanpa keep, web client ID hilang
   // dari APK release -> login Google gagal dengan pesan
   // "Google Sign-In belum dikonfigurasi" walau Google sudah aktif di console.
-  androidResources {
-    keepSpecificResources += listOf(
-      "string/default_web_client_id",
-      "string/google_app_id",
-      "string/gcm_defaultSenderId",
-      "string/google_api_key",
-      "string/google_storage_bucket",
-      "string/project_id"
-    )
-  }
+  // (Catatan: DSL androidResources.keepSpecificResources tidak tersedia di AGP 9 —
+  //  resource dipertahankan lewat referensi statis R.string.default_web_client_id
+  //  di PinConnectScreen + tools:keep di app/src/main/res/values/keep.xml.)
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
