@@ -97,7 +97,7 @@
     <string name="google_err_network">Tidak bisa terhubung ke server Google. Periksa koneksi internet, lalu coba lagi. (auth/network-request-failed)</string>
     <string name="google_err_unknown">Gagal masuk dengan Google: %1$s</string>
     <string name="google_err_credential_provider">Google menolak permintaan masuk (kode %1$s). Biasanya SHA-1 kunci penandatangan APK ini belum terdaftar di Firebase Console → Pengaturan project → Aplikasi Anda → Tambahkan sidik jari SHA-1 (lihat README → \'Setup Google Sign-In\').</string>
-    <string name="google_not_configured">Google Sign-In belum dikonfigurasi. Aktifkan Google di Firebase Console (Authentication → Sign-in method) & daftarkan SHA-1 penandatangan APK (lihat README → \'Setup Google Sign-In\'), lalu unduh ulang google-services.json dan ganti file di folder app/.</string>
+    <string name="google_not_configured">Google Sign-In belum dikonfigurasi. Aktifkan Google di Firebase Console (Authentication → Sign-in method) &amp; daftarkan SHA-1 penandatangan APK (lihat README → \'Setup Google Sign-In\'), lalu unduh ulang google-services.json dan ganti file di folder app/.</string>
     <string name="login_version_label">Money Chat v%1$s · build %2$d</string>
     <string name="pin_name_label">Nama Anda (Cth: Suami / Istri)</string>
     <string name="pin_your_pin">PIN Anda</string>
