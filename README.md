@@ -1,7 +1,7 @@
 # 💬 Money Chat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-1.0.1-brightgreen)
+![Versi](https://img.shields.io/badge/versi-1.2.0-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Money Chat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -14,9 +14,9 @@
 
 | Versi | File | Link |
 |---|---|---|
-| **v1.0.1** (terbaru) | `MoneyChat-v1.0.1-debug.apk` | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
+| **v1.2.0** (terbaru) | `MoneyChat-v1.2.0-debug.apk` | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/Money-chat/releases/latest)** |
 | Semua versi | — | [Daftar Release](https://github.com/ngodingsendiri/Money-chat/releases) |
-| Build mentah (artifact) | `MoneyChat-v1.0.1-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
+| Build mentah (artifact) | `MoneyChat-v1.2.0-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/Money-chat/actions/workflows/build-apk.yml) |
 
 **Cara install:**
 1. Unduh APK dari link di atas (via HP langsung atau kirim ke HP).
@@ -148,4 +148,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.0.1**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Money Chat v1.2.0**
