@@ -2,13 +2,6 @@ package com.ngodingsendiri.moneychat.ui.screens
 
 import android.content.Context
 import android.content.pm.PackageManager
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -65,7 +58,9 @@ fun PinConnectScreen(
     var generatedPin by remember { mutableStateOf<String?>(null) }
     var inputPin by remember { mutableStateOf("") }
     var myName by remember { mutableStateOf("") }
-    var isJoining by remember { mutableStateOf(false) }
+    // State alur PIN tanpa animasi (AnimatedContent sebelumnya sering macet & tombol
+    // bertumpuk): 0 = pilih Buat/Gunakan PIN, 1 = gabung PIN, 2 = PIN tergenerate.
+    var pinFlowState by remember { mutableIntStateOf(0) }
     var isSigningIn by remember { mutableStateOf(false) }
     var authError by remember { mutableStateOf<String?>(null) }
     var signedInEmail by remember { mutableStateOf<String?>(null) }
@@ -202,7 +197,7 @@ fun PinConnectScreen(
             FirebaseAuth.getInstance().signOut()
             signedInEmail = null
             myName = ""
-            isJoining = false
+            pinFlowState = 0
             generatedPin = null
             authError = null
         }
@@ -281,20 +276,8 @@ fun PinConnectScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    AnimatedContent(
-                        targetState = when {
-                            generatedPin != null -> 2
-                            isJoining -> 1
-                            else -> 0
-                        },
-                        transitionSpec = {
-                            (fadeIn(animationSpec = tween(260)) + slideInVertically(initialOffsetY = { it / 6 }, animationSpec = tween(260))) togetherWith
-                                (fadeOut(animationSpec = tween(160)) + slideOutVertically(targetOffsetY = { -it / 6 }, animationSpec = tween(160)))
-                        },
-                        label = "pinFlow"
-                    ) { flow ->
-                        when (flow) {
-                            2 -> {
+                    when (pinFlowState) {
+                        2 -> {
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(20.dp),
@@ -366,7 +349,7 @@ fun PinConnectScreen(
                                 }
 
                                 TextButton(
-                                    onClick = { isJoining = false },
+                                    onClick = { pinFlowState = 0 },
                                     modifier = Modifier.padding(top = 8.dp)
                                 ) {
                                     Text(stringResource(R.string.action_cancel), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -376,6 +359,7 @@ fun PinConnectScreen(
                                 Button(
                                     onClick = {
                                         generatedPin = (100000..999999).random().toString()
+                                        pinFlowState = 2
                                     },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
                                     shape = RoundedCornerShape(16.dp),
@@ -387,14 +371,13 @@ fun PinConnectScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 OutlinedButton(
-                                    onClick = { isJoining = true },
+                                    onClick = { pinFlowState = 1 },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Text(stringResource(R.string.pin_use), fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
-                        }
                     }
                 }
             }
