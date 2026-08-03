@@ -49,6 +49,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -64,8 +65,12 @@ import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -162,6 +167,8 @@ fun ChatScreen(
     var editingMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
     var attachMenuOpen by remember { mutableStateOf(false) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    val attachmentSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Smooth color transitions instead of instant snapping
     val sendBgColor by animateColorAsState(
@@ -540,7 +547,7 @@ fun ChatScreen(
                 }
             }
 
-            // Chat Input Box
+            // Chat Input Box — Telegram-style: Plus | TextField (auto-expand) | Send
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 8.dp,
@@ -549,52 +556,26 @@ fun ChatScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .animateContentSize(),
                     verticalAlignment = Alignment.Bottom
                 ) {
-                    Box {
-                        IconButton(onClick = { attachMenuOpen = true }) {
-                            Icon(
-                                imageVector = Icons.Rounded.AddPhotoAlternate,
-                                contentDescription = stringResource(R.string.chat_attach_desc),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = attachMenuOpen,
-                            onDismissRequest = { attachMenuOpen = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_take_photo)) },
-                                leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
-                                onClick = {
-                                    attachMenuOpen = false
-                                    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-                                    val file = File(dir, "cam_${System.currentTimeMillis()}.jpg")
-                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                    cameraTempUri = uri
-                                    runCatching { takePictureLauncher.launch(uri) }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_pick_gallery)) },
-                                leadingIcon = { Icon(Icons.Rounded.PhotoLibrary, contentDescription = null) },
-                                onClick = {
-                                    attachMenuOpen = false
-                                    pickGalleryLauncher.launch("image/*")
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_send_pdf)) },
-                                leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) },
-                                onClick = {
-                                    attachMenuOpen = false
-                                    pickPdfLauncher.launch(arrayOf("application/pdf"))
-                                }
-                            )
-                        }
+                    // Tombol Plus (+) — pusat semua lampiran
+                    IconButton(
+                        onClick = { showAttachmentSheet = true },
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.chat_attach_desc),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
 
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Kolom input teks — auto-grow hingga 6 baris, lalu scrollable
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { if (it.length <= MAX_MESSAGE_LENGTH) inputText = it },
@@ -613,7 +594,7 @@ fun ChatScreen(
                             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f),
                             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f)
                         ),
-                        maxLines = 4,
+                        maxLines = 6,
                         minLines = 1,
                         trailingIcon = {
                             IconButton(
@@ -635,32 +616,130 @@ fun ChatScreen(
                         }
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
-                    Column(
-                        verticalArrangement = Arrangement.Bottom,
-                        modifier = Modifier.padding(bottom = 2.dp)
+                    // Tombol Kirim — selalu rata bawah meskipun input memanjang
+                    IconButton(
+                        enabled = inputText.isNotBlank() || pendingImagePath != null || pendingFilePath != null,
+                        onClick = sendMessage,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(sendBgColor)
+                            .testTag("send_button")
                     ) {
-                        IconButton(
-                            enabled = inputText.isNotBlank() || pendingImagePath != null || pendingFilePath != null,
-                            onClick = sendMessage,
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(sendBgColor)
-                                .testTag("send_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Send,
-                                contentDescription = stringResource(R.string.chat_send_desc),
-                                tint = sendTintColor,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Send,
+                            contentDescription = stringResource(R.string.chat_send_desc),
+                            tint = sendTintColor,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
             }
-        }
+
+            // ModalBottomSheet untuk pilihan lampiran (Telegram-style)
+            if (showAttachmentSheet) {
+                ModalBottomSheet(
+                    onDismissRequest = { showAttachmentSheet = false },
+                    sheetState = attachmentSheetState,
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 32.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.chat_attach_desc),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)
+                        )
+                        HorizontalDivider()
+
+                        // Opsi: Kamera
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(stringResource(R.string.chat_take_photo)) },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.primaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PhotoCamera,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                showAttachmentSheet = false
+                                val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                                val file = File(dir, "cam_${System.currentTimeMillis()}.jpg")
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                cameraTempUri = uri
+                                runCatching { takePictureLauncher.launch(uri) }
+                            }
+                        )
+
+                        // Opsi: Galeri
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(stringResource(R.string.chat_pick_gallery)) },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PhotoLibrary,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                showAttachmentSheet = false
+                                pickGalleryLauncher.launch("image/*")
+                            }
+                        )
+
+                        // Opsi: Dokumen PDF
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(stringResource(R.string.chat_send_pdf)) },
+                            leadingContent = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(ExpenseRed.copy(alpha = 0.15f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.PictureAsPdf,
+                                        contentDescription = null,
+                                        tint = ExpenseRed,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                showAttachmentSheet = false
+                                pickPdfLauncher.launch(arrayOf("application/pdf"))
+                            }
+                        )
+                    }
+                }
+            } // end ModalBottomSheet if-block
+        } // end Column
 
         // Tombol lompat ke pesan terbaru (muncul saat scroll ke atas)
         AnimatedVisibility(
