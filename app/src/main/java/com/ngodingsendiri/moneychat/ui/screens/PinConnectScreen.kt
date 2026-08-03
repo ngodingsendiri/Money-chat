@@ -38,6 +38,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.ngodingsendiri.moneychat.R
 import kotlinx.coroutines.launch
@@ -134,8 +135,24 @@ fun PinConnectScreen(
                 }
             } catch (e: GetCredentialCancellationException) {
                 // User membatalkan dialog Google — bukan error, biarkan tenang.
+            } catch (e: FirebaseAuthException) {
+                // Tampilkan penyebab sebenarnya supaya user tahu harus apa.
+                authError = when (e.errorCode) {
+                    "auth/operation-not-allowed" ->
+                        context.getString(R.string.google_err_provider_not_enabled)
+                    "auth/invalid-credential", "auth/invalid-id-token",
+                    "auth/user-disabled", "auth/user-not-found" ->
+                        context.getString(R.string.google_err_invalid_credential)
+                    "auth/network-request-failed" ->
+                        context.getString(R.string.google_err_network)
+                    else ->
+                        context.getString(R.string.google_err_unknown, e.message ?: e.errorCode)
+                }
             } catch (e: Exception) {
-                authError = context.getString(R.string.google_sign_in_failed)
+                authError = context.getString(
+                    R.string.google_err_unknown,
+                    e.message ?: e.javaClass.simpleName
+                )
             } finally {
                 isSigningIn = false
             }
