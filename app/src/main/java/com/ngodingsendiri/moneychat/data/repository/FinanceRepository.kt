@@ -38,13 +38,14 @@ class FinanceRepository(
         FirestoreSyncManager.stop()
     }
 
-    suspend fun sendMessage(sender: String, messageText: String) {
+    suspend fun sendMessage(sender: String, messageText: String, imagePath: String? = null) {
         withContext(Dispatchers.IO) {
-        // 1. Insert user chat message (cloudId unik lintas perangkat)
+        // 1. Insert user chat message (cloudId unik lintas perangkat; imagePath = foto nota lokal)
         val initialMsg = ChatMessage(
             sender = sender,
             messageText = messageText,
             timestamp = System.currentTimeMillis(),
+            imagePath = imagePath,
             cloudId = UUID.randomUUID().toString()
         )
         val msgId = chatMessageDao.insertMessage(initialMsg)
@@ -52,8 +53,8 @@ class FinanceRepository(
         // Get recent context
         val recentList = chatMessageDao.getAllMessages().first().takeLast(10)
 
-        // 2. Process message with AI Parser silently in background
-        val aiResult = GeminiService.parseChatMessage(messageText, sender, recentList)
+        // 2. Process message with AI Parser silently in background (foto nota ikut dibaca AI)
+        val aiResult = GeminiService.parseChatMessage(messageText, sender, recentList, imagePath)
 
         var finalMsg = initialMsg.copy(id = msgId)
 

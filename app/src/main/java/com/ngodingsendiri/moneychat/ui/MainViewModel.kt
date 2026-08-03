@@ -106,12 +106,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.stopCloudSync()
     }
 
-    fun sendMessage(text: String) {
-        if (text.isBlank()) return
+    fun sendMessage(text: String, imagePath: String? = null) {
+        if (text.isBlank() && imagePath == null) return
         val currentSender = _activeSender.value
         viewModelScope.launch {
             try {
-                repository.sendMessage(currentSender, text.trim())
+                repository.sendMessage(currentSender, text.trim(), imagePath)
             } catch (e: Exception) {
                 Log.w("MainViewModel", "Operasi gagal", e)
             }

@@ -384,7 +384,7 @@ class MainActivity : ComponentActivity() {
                                             messages = messages,
                                             activeSender = activeSender,
                                             isAiThinking = isAiThinking,
-                                            onSendMessage = { viewModel.sendMessage(it) },
+                                            onSendMessage = { text, imagePath -> viewModel.sendMessage(text, imagePath) },
                                             onAskAiClicked = { viewModel.askAiInChat(it) },
                                             onDeleteMessage = { viewModel.deleteChatMessage(it) }
                                         )

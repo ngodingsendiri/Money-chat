@@ -54,13 +54,15 @@ object OpenRouterService {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /** Kirim prompt ke model gratis OpenRouter dengan rotasi otomatis saat gagal. */
-    suspend fun completeChat(prompt: String): String? = withContext(Dispatchers.IO) {
+    /** Kirim prompt ke model gratis OpenRouter dengan rotasi otomatis saat gagal.
+     *  imagePath opsional: kalau ada, dikirim sebagai bagian image_url (data URI)
+     *  supaya model vision bisa membaca foto nota. */
+    suspend fun completeChat(prompt: String, imagePath: String? = null): String? = withContext(Dispatchers.IO) {
         val key = activeApiKey() ?: return@withContext null
 
         for (model in FREE_MODELS) {
             try {
-                val text = tryModel(key, model, prompt)
+                val text = tryModel(key, model, prompt, imagePath)
                 if (!text.isNullOrBlank()) return@withContext text
             } catch (e: Exception) {
                 Log.w("OpenRouterService", "Model gagal, rotasi ke model gratis berikutnya", e)
@@ -69,11 +71,28 @@ object OpenRouterService {
         null
     }
 
-    private fun tryModel(key: String, model: String, prompt: String): String? {
+    private fun tryModel(key: String, model: String, prompt: String, imagePath: String? = null): String? {
+        // Dengan foto → content berupa array (teks + image_url); tanpa foto → string biasa.
+        val content: Any = if (imagePath != null) {
+            val b64 = ImageFileUtil.encodeBase64(imagePath)
+            if (b64 != null) {
+                JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", prompt))
+                    .put(
+                        JSONObject().put("type", "image_url")
+                            .put("image_url", JSONObject().put("url", "data:image/jpeg;base64,$b64"))
+                    )
+            } else {
+                prompt
+            }
+        } else {
+            prompt
+        }
+
         val body = JSONObject()
             .put("model", model)
             .put("messages", JSONArray().put(
-                JSONObject().put("role", "user").put("content", prompt)
+                JSONObject().put("role", "user").put("content", content)
             ))
             .put("temperature", 0.2)
 

@@ -47,14 +47,20 @@ object GeminiService {
     suspend fun parseChatMessage(
         messageText: String,
         sender: String,
-        recentContext: List<ChatMessage>
+        recentContext: List<ChatMessage>,
+        imagePath: String? = null
     ): AiChatParseResult = withContext(Dispatchers.IO) {
-        val prompt = buildParsePrompt(messageText, sender)
+        // Pesan dengan foto nota → prompt khusus membaca nota; teks biasa → prompt standar.
+        val prompt = if (imagePath != null) {
+            buildReceiptPrompt(messageText, sender)
+        } else {
+            buildParsePrompt(messageText, sender)
+        }
 
         // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
         if (OpenRouterService.activeApiKey() != null) {
             try {
-                val text = OpenRouterService.completeChat(prompt)
+                val text = OpenRouterService.completeChat(prompt, imagePath)
                 if (text != null) {
                     val parsed = parseJsonResponse(wrapOpenAiText(text), messageText, sender)
                     if (parsed != null) return@withContext parsed
@@ -68,7 +74,7 @@ object GeminiService {
         val apiKey = getApiKey()
         if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
             try {
-                val jsonResponse = callGeminiApi(prompt, apiKey)
+                val jsonResponse = callGeminiApi(prompt, apiKey, imagePath)
                 val parsed = parseJsonResponse(jsonResponse, messageText, sender)
                 if (parsed != null) {
                     return@withContext parsed
@@ -78,7 +84,8 @@ object GeminiService {
             }
         }
 
-        // 3) Fallback to Offline Heuristic Engine
+        // 3) Fallback: teks biasa pakai mesin offline; foto nota tanpa AI hanya tersimpan
+        //    (tidak bisa dibaca tanpa kunci AI vision).
         return@withContext offlineHeuristicParse(messageText, sender)
     }
 
@@ -278,6 +285,44 @@ object GeminiService {
         }
     }
 
+    /** Prompt khusus untuk foto nota/bukti belanja — AI diminta membaca isi foto
+     *  lalu mengeluarkan JSON transaksi yang sama dengan parser teks. */
+    private fun buildReceiptPrompt(messageText: String, sender: String): String {
+        return """
+            Kamu adalah 'Asisten Money Chat' yang bertugas membaca FOTO NOTA / BUKTI BELANJA / STRUK dari $sender.
+            
+            Foto yang kamu terima adalah nota belanja. Analisis foto tersebut dan catat TOTAL pengeluarannya.
+            Keterangan tambahan dari pengirim: "$messageText"
+            
+            PILIHAN KATEGORI VALID:
+            - Groceries & Sembako
+            - Makanan & Minuman
+            - Tagihan & Utilitas
+            - Kebutuhan Anak
+            - Transportasi
+            - Kesehatan & Skincare
+            - Hiburan & Belanja
+            - Lain-lain
+            - Gaji & Pemasukan
+            
+            Keluarkan jawaban HANYA berupa JSON valid dalam format persis seperti ini:
+            {
+              "containsTransaction": true,
+              "type": "PENGELUARAN",
+              "category": "Groceries & Sembako",
+              "amount": 150000,
+              "description": "Nota belanja [nama toko di nota]",
+              "aiReply": "Nota belanja dicatat: Rp 150.000 (Groceries & Sembako)."
+            }
+            
+            Jika foto bukan nota / tidak terbaca dengan jelas, kirimkan:
+            {
+              "containsTransaction": false,
+              "aiReply": "Foto tersimpan, tapi tidak bisa kubaca sebagai nota. Coba foto ulang dengan cahaya cukup & seluruh nota terlihat."
+            }
+        """.trimIndent()
+    }
+
     private fun buildParsePrompt(messageText: String, sender: String): String {
         return """
             Kamu adalah 'Asisten Money Chat' yang bertugas memantau obrolan transaksi finansial pada grup, lembaga, atau rumah tangga.
@@ -315,7 +360,7 @@ object GeminiService {
         """.trimIndent()
     }
 
-    private fun callGeminiApi(prompt: String, apiKey: String): String {
+    private fun callGeminiApi(prompt: String, apiKey: String, imagePath: String? = null): String {
         val url = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent?key=$apiKey"
 
         val contentsArray = JSONArray().apply {
@@ -324,6 +369,18 @@ object GeminiService {
                     put(JSONObject().apply {
                         put("text", prompt)
                     })
+                    // Foto nota dikirim sebagai inline_data (base64) agar model bisa membacanya.
+                    if (imagePath != null) {
+                        val b64 = ImageFileUtil.encodeBase64(imagePath)
+                        if (b64 != null) {
+                            put(JSONObject().apply {
+                                put("inline_data", JSONObject().apply {
+                                    put("mime_type", "image/jpeg")
+                                    put("data", b64)
+                                })
+                            })
+                        }
+                    }
                 })
             })
         }

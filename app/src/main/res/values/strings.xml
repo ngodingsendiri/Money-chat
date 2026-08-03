@@ -36,6 +36,12 @@
     <string name="chat_empty_hint">Kirim pesan atau catat transaksi untuk memulai.</string>
     <string name="chat_input_placeholder">Ketik pesan...</string>
     <string name="chat_send_desc">Kirim</string>
+    <string name="chat_attach_desc">Lampirkan foto</string>
+    <string name="chat_take_photo">Ambil Foto</string>
+    <string name="chat_pick_gallery">Pilih dari Galeri</string>
+    <string name="chat_image_desc">Foto nota</string>
+    <string name="chat_image_attached">Foto nota terlampir — AI akan membacanya</string>
+    <string name="chat_image_remove">Hapus lampiran</string>
     <string name="chat_ask_ai_desc">Tanya AI</string>
     <string name="chat_ai_thinking">AI sedang memproses...</string>
     <string name="sender_bendahara">Bendahara</string>
@@ -103,6 +109,8 @@
     <string name="pin_name_label">Nama Anda (Cth: Suami / Istri)</string>
     <string name="pin_your_pin">PIN Anda</string>
     <string name="pin_share_hint">Gunakan PIN ini untuk menghubungkan akun pada perangkat lain.</string>
+    <string name="pin_copy">Salin PIN</string>
+    <string name="pin_copied">PIN tersalin! 📋</string>
     <string name="pin_enter">Masuk</string>
     <string name="pin_input_label">Masukkan PIN</string>
     <string name="pin_join">Gabung</string>

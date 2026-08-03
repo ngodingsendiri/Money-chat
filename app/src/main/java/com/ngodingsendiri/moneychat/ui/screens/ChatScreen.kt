@@ -1,5 +1,9 @@
 package com.ngodingsendiri.moneychat.ui.screens
 
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -8,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -36,11 +41,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -62,6 +71,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -70,8 +80,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -79,8 +92,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.local.ChatMessage
+import com.ngodingsendiri.moneychat.data.remote.ImageFileUtil
+import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.ngodingsendiri.moneychat.ui.theme.AiPurple
 import com.ngodingsendiri.moneychat.ui.theme.AiPurpleLight
 import com.ngodingsendiri.moneychat.ui.theme.ExpenseRed
@@ -109,13 +127,16 @@ fun ChatScreen(
     activeSender: String,
     isAiThinking: Boolean,
     quickSuggestions: List<String>,
-    onSendMessage: (String) -> Unit,
+    onSendMessage: (String, String?) -> Unit,
     onAskAiClicked: (String) -> Unit,
     onDeleteMessage: (Long) -> Unit
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     var inputText by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
+    var pendingImagePath by remember { mutableStateOf<String?>(null) }
+    var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
+    var attachMenuOpen by remember { mutableStateOf(false) }
 
     // Smooth color transitions instead of instant snapping
     val sendBgColor by animateColorAsState(
@@ -141,6 +162,24 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var lastKnownCount by remember { mutableIntStateOf(-1) }
+
+    val context = LocalContext.current
+    val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = cameraTempUri
+        cameraTempUri = null
+        if (success && uri != null) {
+            coroutineScope.launch {
+                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri)
+            }
+        }
+    }
+    val pickGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri)
+            }
+        }
+    }
 
     val todayLabel = stringResource(R.string.today_label)
     val yesterdayLabel = stringResource(R.string.yesterday_label)
@@ -175,9 +214,11 @@ fun ChatScreen(
 
     val sendMessage = {
         val text = inputText.trim()
-        if (text.isNotBlank()) {
-            onSendMessage(text)
+        val image = pendingImagePath
+        if (text.isNotBlank() || image != null) {
+            onSendMessage(text, image)
             inputText = ""
+            pendingImagePath = null
         }
     }
 
@@ -294,6 +335,55 @@ fun ChatScreen(
                 )
             }
 
+            // Pratinjau foto lampiran (nota belanja) sebelum dikirim
+            val previewPath = pendingImagePath
+            val previewBitmap by produceState<Bitmap?>(
+                initialValue = null,
+                key1 = previewPath
+            ) {
+                value = withContext(Dispatchers.IO) {
+                    previewPath?.let { ImageFileUtil.decodeImage(it, 640) }
+                }
+            }
+            AnimatedVisibility(
+                visible = previewPath != null,
+                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { it }, animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(150)) + slideOutVertically(targetOffsetY = { it }, animationSpec = tween(150))
+            ) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        previewBitmap?.let {
+                            Image(
+                                bitmap = it.asImageBitmap(),
+                                contentDescription = stringResource(R.string.chat_image_desc),
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(R.string.chat_image_attached),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { pendingImagePath = null }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.chat_image_remove)
+                            )
+                        }
+                    }
+                }
+            }
+
             // Chat Input Box
             Surface(
                 color = MaterialTheme.colorScheme.surface,
@@ -306,6 +396,41 @@ fun ChatScreen(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
+                    Box {
+                        IconButton(onClick = { attachMenuOpen = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.AddPhotoAlternate,
+                                contentDescription = stringResource(R.string.chat_attach_desc),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = attachMenuOpen,
+                            onDismissRequest = { attachMenuOpen = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_take_photo)) },
+                                leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
+                                onClick = {
+                                    attachMenuOpen = false
+                                    val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+                                    val file = File(dir, "cam_${System.currentTimeMillis()}.jpg")
+                                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                    cameraTempUri = uri
+                                    runCatching { takePictureLauncher.launch(uri) }
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_pick_gallery)) },
+                                leadingIcon = { Icon(Icons.Rounded.PhotoLibrary, contentDescription = null) },
+                                onClick = {
+                                    attachMenuOpen = false
+                                    pickGalleryLauncher.launch("image/*")
+                                }
+                            )
+                        }
+                    }
+
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { if (it.length <= MAX_MESSAGE_LENGTH) inputText = it },
@@ -353,7 +478,7 @@ fun ChatScreen(
                         modifier = Modifier.padding(bottom = 2.dp)
                     ) {
                         IconButton(
-                            enabled = inputText.isNotBlank(),
+                            enabled = inputText.isNotBlank() || pendingImagePath != null,
                             onClick = sendMessage,
                             modifier = Modifier
                                 .size(48.dp)
@@ -495,6 +620,17 @@ fun ChatMessageBubble(
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.forLanguageTag("id-ID")) }
     val formattedTime = timeFormat.format(Date(message.timestamp))
 
+    // Dekode foto lampiran untuk ditampilkan di bubble (disampling, aman memori)
+    val imagePath = message.imagePath
+    val imageBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = imagePath
+    ) {
+        value = withContext(Dispatchers.IO) {
+            imagePath?.let { ImageFileUtil.decodeImage(it, 1100) }
+        }
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = alignment
@@ -553,6 +689,19 @@ fun ChatMessageBubble(
                 .testTag("chat_bubble_${message.id}")
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                // Foto lampiran (nota belanja) ditampilkan di atas teks pesan
+                imageBitmap?.let { b ->
+                    Image(
+                        bitmap = b.asImageBitmap(),
+                        contentDescription = stringResource(R.string.chat_image_desc),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 Text(
                     text = message.messageText,
                     style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),

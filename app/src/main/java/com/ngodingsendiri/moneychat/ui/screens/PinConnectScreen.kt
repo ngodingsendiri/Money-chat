@@ -11,15 +11,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -39,6 +43,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.ngodingsendiri.moneychat.BuildConfig
 import com.ngodingsendiri.moneychat.R
 import java.security.MessageDigest
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -64,6 +69,8 @@ fun PinConnectScreen(
     var isSigningIn by remember { mutableStateOf(false) }
     var authError by remember { mutableStateOf<String?>(null) }
     var signedInEmail by remember { mutableStateOf<String?>(null) }
+    val clipboard = LocalClipboardManager.current
+    var pinCopied by remember { mutableStateOf(false) }
 
     val defaultName = stringResource(R.string.pin_default_name)
     val defaultGoogleName = stringResource(R.string.pin_default_google_name)
@@ -303,6 +310,37 @@ fun PinConnectScreen(
                                             textAlign = TextAlign.Center,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+
+                                        Spacer(modifier = Modifier.height(16.dp))
+
+                                        // PIN bisa disalin ke clipboard — biar gampang dikirim ke pasangan
+                                        OutlinedButton(
+                                            onClick = {
+                                                generatedPin?.let {
+                                                    clipboard.setText(AnnotatedString(it))
+                                                    pinCopied = true
+                                                    scope.launch {
+                                                        delay(2000)
+                                                        pinCopied = false
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(16.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (pinCopied) Icons.Rounded.CheckCircle else Icons.Rounded.ContentCopy,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(if (pinCopied) R.string.pin_copied else R.string.pin_copy),
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
 
                                         Spacer(modifier = Modifier.height(20.dp))
 

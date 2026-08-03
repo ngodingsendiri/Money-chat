@@ -15,8 +15,8 @@ android {
     applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 12
-    versionName = "1.2.7"
+    versionCode = 13
+    versionName = "1.2.8"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
