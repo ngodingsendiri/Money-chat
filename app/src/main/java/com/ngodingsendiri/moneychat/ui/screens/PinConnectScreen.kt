@@ -1,8 +1,5 @@
 package com.ngodingsendiri.moneychat.ui.screens
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.ActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -33,8 +30,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -87,12 +86,27 @@ fun PinConnectScreen(
         }
     }
 
-    val googleLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetCredential()
-    ) { result ->
-        when (result) {
-            is ActivityResult.Success -> {
-                val credential = result.data.credential
+    fun startGoogleSignIn() {
+        val clientId = webClientId
+        if (clientId == null) {
+            authError = context.getString(R.string.google_not_configured)
+            return
+        }
+        scope.launch {
+            isSigningIn = true
+            authError = null
+            try {
+                val credentialManager = CredentialManager.create(context)
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(
+                        GetGoogleIdOption.Builder()
+                            .setServerClientId(clientId)
+                            .setFilterByAuthorizedAccounts(false)
+                            .build()
+                    )
+                    .build()
+                val result = credentialManager.getCredential(context, request)
+                val credential = result.credential
                 if (credential is CustomCredential &&
                     credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
                 ) {
@@ -102,49 +116,30 @@ fun PinConnectScreen(
                         null
                     }
                     if (idToken != null) {
-                        scope.launch {
-                            isSigningIn = true
-                            authError = null
-                            try {
-                                val auth = FirebaseAuth.getInstance()
-                                auth.signInWithCredential(
-                                    GoogleAuthProvider.getCredential(idToken, null)
-                                ).await()
-                                val user = auth.currentUser
-                                signedInEmail = user?.email ?: user?.displayName
-                                user?.displayName?.let {
-                                    if (myName.isBlank()) myName = it
-                                }
-                            } catch (e: Exception) {
-                                authError = context.getString(R.string.google_sign_in_failed)
-                            } finally {
-                                isSigningIn = false
-                            }
+                        val auth = FirebaseAuth.getInstance()
+                        auth.signInWithCredential(
+                            GoogleAuthProvider.getCredential(idToken, null)
+                        ).await()
+                        val user = auth.currentUser
+                        signedInEmail = user?.email ?: user?.displayName
+                        user?.displayName?.let {
+                            if (myName.isBlank()) myName = it
                         }
                     } else {
                         authError = context.getString(R.string.google_sign_in_failed)
                     }
+                } else {
+                    // Kredensial bukan Google ID Token (mis. passkey) — tidak dipakai untuk login Google.
+                    authError = context.getString(R.string.google_sign_in_failed)
                 }
+            } catch (e: GetCredentialCancellationException) {
+                // User membatalkan dialog Google — bukan error, biarkan tenang.
+            } catch (e: Exception) {
+                authError = context.getString(R.string.google_sign_in_failed)
+            } finally {
+                isSigningIn = false
             }
-            is ActivityResult.Failure, ActivityResult.Canceled -> authError = null
         }
-    }
-
-    fun startGoogleSignIn() {
-        val clientId = webClientId
-        if (clientId == null) {
-            authError = context.getString(R.string.google_not_configured)
-            return
-        }
-        val request = GetCredentialRequest.Builder()
-            .addCredentialOption(
-                GetGoogleIdOption.Builder()
-                    .setServerClientId(clientId)
-                    .setFilterByAuthorizedAccounts(false)
-                    .build()
-            )
-            .build()
-        googleLauncher.launch(request)
     }
 
     fun signOutGoogle() {

@@ -18,6 +18,10 @@ class FinanceRepository(
     private val transactionDao: TransactionDao
 ) {
 
+    companion object {
+        private const val TAG = "FinanceRepository"
+    }
+
     val allMessages: Flow<List<ChatMessage>> = chatMessageDao.getAllMessages()
     val allTransactions: Flow<List<FinancialTransaction>> = transactionDao.getAllTransactions()
 

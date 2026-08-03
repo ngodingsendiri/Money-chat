@@ -38,7 +38,7 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Copy
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Receipt
@@ -255,7 +255,7 @@ fun ChatScreen(
                                 ) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chat_copy)) },
-                                        leadingIcon = { Icon(Icons.Rounded.Copy, contentDescription = null) },
+                                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
                                         onClick = {
                                             clipboard.setText(AnnotatedString(msg.messageText))
                                             menuOpen = false

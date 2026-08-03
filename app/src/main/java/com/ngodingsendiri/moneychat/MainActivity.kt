@@ -142,8 +142,9 @@ class MainActivity : ComponentActivity() {
                 var openRouterKey by remember { mutableStateOf(prefs.getString("openrouter_api_key", null)) }
 
                 LaunchedEffect(workspacePin, userName) {
-                    if (workspacePin != null) {
-                        viewModel.startCloudSync(workspacePin)
+                    val pin = workspacePin
+                    if (pin != null) {
+                        viewModel.startCloudSync(pin)
                     } else {
                         viewModel.stopCloudSync()
                     }
@@ -401,8 +402,8 @@ class MainActivity : ComponentActivity() {
                             if (showAddDialog) {
                                 AddTransactionDialog(
                                     onDismiss = { showAddDialog = false },
-                                    onConfirm = { type, category, amount, description, loggedBy ->
-                                        viewModel.addManualTransaction(type, category, amount, description, loggedBy)
+                                    onConfirm = { tx ->
+                                        viewModel.addManualTransaction(tx.type, tx.category, tx.amount, tx.description, tx.loggedBy)
                                     }
                                 )
                             }

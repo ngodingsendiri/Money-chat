@@ -15,8 +15,8 @@ android {
     applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.1.0"
+    versionCode = 4
+    versionName = "1.1.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
@@ -87,6 +87,7 @@ dependencies {
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
   implementation(libs.androidx.credentials)
+  implementation(libs.googleid)
   implementation(libs.androidx.credentials.play.services.auth)
   implementation(libs.play.services.auth)
   implementation(libs.kotlinx.coroutines.play.services)
