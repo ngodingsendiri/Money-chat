@@ -157,13 +157,17 @@ class MainActivity : ComponentActivity() {
                     com.ngodingsendiri.moneychat.data.remote.OpenRouterService.userApiKey = openRouterKey
                 }
                 LaunchedEffect(Unit) {
-                    // Cek update otomatis (throttle 6 jam biar gak nembak GitHub API tiap buka app)
+                    // Cek update otomatis (throttle 1 jam biar gak nembak GitHub API tiap buka app).
+                    // Timestamp cuma di-set kalau ceknya SUKSES — kalau gagal (offline/rate-limit),
+                    // cooldown tidak terpakai dan dicoba lagi saat app dibuka berikutnya.
                     val lastCheck = prefs.getLong("last_update_check", 0L)
-                    if (System.currentTimeMillis() - lastCheck > 6 * 60 * 60 * 1000L) {
-                        prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                    if (System.currentTimeMillis() - lastCheck > 60 * 60 * 1000L) {
                         val release = GitHubUpdateChecker.checkLatest()
-                        if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
-                            updateInfo = release
+                        if (release != null) {
+                            prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
+                            if (GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
+                                updateInfo = release
+                            }
                         }
                     }
                 }
@@ -461,67 +465,6 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            updateInfo?.let { release ->
-                                AlertDialog(
-                                    onDismissRequest = { if (!isDownloadingUpdate) updateInfo = null },
-                                    icon = { Icon(Icons.Rounded.SystemUpdate, contentDescription = null) },
-                                    title = { Text(stringResource(R.string.update_available_title)) },
-                                    text = {
-                                        Text(
-                                            text = if (isDownloadingUpdate) {
-                                                stringResource(R.string.update_downloading)
-                                            } else {
-                                                stringResource(R.string.update_available_message, release.versionName)
-                                            }
-                                        )
-                                    },
-                                    confirmButton = {
-                                        TextButton(
-                                            enabled = !isDownloadingUpdate,
-                                            onClick = {
-                                                scope.launch {
-                                                    isDownloadingUpdate = true
-                                                    try {
-                                                        val url = release.apkUrl
-                                                        if (url == null) throw IllegalStateException("APK tidak tersedia di release")
-                                                        val dest = File(context.cacheDir, "downloads/moneychat-${release.versionName}.apk")
-                                                        GitHubUpdateChecker.downloadApk(url, dest)
-                                                        installApk(context, dest)
-                                                    } catch (e: Exception) {
-                                                        updateMessage = context.getString(R.string.update_download_failed)
-                                                    } finally {
-                                                        isDownloadingUpdate = false
-                                                        updateInfo = null
-                                                    }
-                                                }
-                                            }
-                                        ) {
-                                            Text(stringResource(R.string.update_action))
-                                        }
-                                    },
-                                    dismissButton = {
-                                        if (!isDownloadingUpdate) {
-                                            TextButton(onClick = { updateInfo = null }) {
-                                                Text(stringResource(R.string.update_later))
-                                            }
-                                        }
-                                    }
-                                )
-                            }
-
-                            updateMessage?.let { msg ->
-                                AlertDialog(
-                                    onDismissRequest = { updateMessage = null },
-                                    title = { Text(stringResource(R.string.update_check_title)) },
-                                    text = { Text(msg) },
-                                    confirmButton = {
-                                        TextButton(onClick = { updateMessage = null }) {
-                                            Text(stringResource(R.string.action_ok))
-                                        }
-                                    }
-                                )
-                            }
-
                             auditReport?.let { report ->
                                 AiReportDialog(
                                     reportText = report,
@@ -529,6 +472,69 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
+                    }
+
+                    // Dialog update tampil di SEMUA layar (termasuk layar login/PIN),
+                    // jadi yang belum selesai onboarding tetap dapat notif rilis baru.
+                    updateInfo?.let { release ->
+                        AlertDialog(
+                            onDismissRequest = { if (!isDownloadingUpdate) updateInfo = null },
+                            icon = { Icon(Icons.Rounded.SystemUpdate, contentDescription = null) },
+                            title = { Text(stringResource(R.string.update_available_title)) },
+                            text = {
+                                Text(
+                                    text = if (isDownloadingUpdate) {
+                                        stringResource(R.string.update_downloading)
+                                    } else {
+                                        stringResource(R.string.update_available_message, release.versionName)
+                                    }
+                                )
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    enabled = !isDownloadingUpdate,
+                                    onClick = {
+                                        scope.launch {
+                                            isDownloadingUpdate = true
+                                            try {
+                                                val url = release.apkUrl
+                                                if (url == null) throw IllegalStateException("APK tidak tersedia di release")
+                                                val dest = File(context.cacheDir, "downloads/moneychat-${release.versionName}.apk")
+                                                GitHubUpdateChecker.downloadApk(url, dest)
+                                                installApk(context, dest)
+                                            } catch (e: Exception) {
+                                                updateMessage = context.getString(R.string.update_download_failed)
+                                            } finally {
+                                                isDownloadingUpdate = false
+                                                updateInfo = null
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(R.string.update_action))
+                                }
+                            },
+                            dismissButton = {
+                                if (!isDownloadingUpdate) {
+                                    TextButton(onClick = { updateInfo = null }) {
+                                        Text(stringResource(R.string.update_later))
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    updateMessage?.let { msg ->
+                        AlertDialog(
+                            onDismissRequest = { updateMessage = null },
+                            title = { Text(stringResource(R.string.update_check_title)) },
+                            text = { Text(msg) },
+                            confirmButton = {
+                                TextButton(onClick = { updateMessage = null }) {
+                                    Text(stringResource(R.string.action_ok))
+                                }
+                            }
+                        )
                     }
                 }
             }
