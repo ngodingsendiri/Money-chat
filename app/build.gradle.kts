@@ -15,8 +15,8 @@ android {
     applicationId = "com.ngodingsendiri.moneychat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "1.2.1"
+    versionCode = 7
+    versionName = "1.2.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
@@ -46,6 +46,21 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
+  }
+
+  // Resource Firebase (default_web_client_id dkk.) dibaca lewat getIdentifier()
+  // yang tidak terdeteksi resource shrinker. Tanpa keep, web client ID hilang
+  // dari APK release -> login Google gagal dengan pesan
+  // "Google Sign-In belum dikonfigurasi" walau Google sudah aktif di console.
+  androidResources {
+    keepSpecificResources += listOf(
+      "string/default_web_client_id",
+      "string/google_app_id",
+      "string/gcm_defaultSenderId",
+      "string/google_api_key",
+      "string/google_storage_bucket",
+      "string/project_id"
+    )
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

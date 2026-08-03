@@ -19,17 +19,13 @@
 # ---------------------------------------------------------------------------
 # Firebase Google Sign-In
 # ---------------------------------------------------------------------------
-# default_web_client_id dibaca lewat Resources.getIdentifier() (dinamis) di
-# PinConnectScreen. Resource shrinker tidak bisa mendeteksi pemakaian dinamis
-# ini, sehingga OAuth web client ID hilang dari APK release -> login Google
-# gagal dengan pesan "Google Sign-In belum dikonfigurasi" walau Google sudah
-# diaktifkan di Firebase Console. Keep resource ini untuk semua build release.
--keepresources string/default_web_client_id
--keepresources string/google_app_id
--keepresources string/gcm_defaultSenderId
--keepresources string/google_api_key
--keepresources string/google_storage_bucket
--keepresources string/project_id
+# CATATAN: opsi "-keepresources" adalah milik ProGuard dan TIDAK dikenali R8
+# (build release gagal dengan "R8: Unknown option"). Resource Firebase
+# (default_web_client_id dkk.) dipertahankan lewat dua mekanisme yang valid:
+#   1. androidResources.keepSpecificResources di app/build.gradle.kts
+#   2. PinConnectScreen membaca default_web_client_id via referensi statis
+#      R.string.default_web_client_id (bukan getIdentifier), sehingga resource
+#      shrinker otomatis menyimpannya di APK release.
 
 # Data model Firestore dibaca via Firestore.toObject() yang memakai reflection
 # (CustomClassMapper). R8 tidak bisa melihat pemakaian reflektif ini, jadi

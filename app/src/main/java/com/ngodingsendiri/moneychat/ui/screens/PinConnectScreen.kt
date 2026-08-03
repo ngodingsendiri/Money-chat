@@ -40,6 +40,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
+import com.ngodingsendiri.moneychat.BuildConfig
 import com.ngodingsendiri.moneychat.R
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -69,13 +70,14 @@ fun PinConnectScreen(
     val defaultGoogleName = stringResource(R.string.pin_default_google_name)
 
     // Web client ID (default_web_client_id) — dihasilkan plugin google-services dari
-    // oauth_client web di google-services.json. Dibaca aman via getIdentifier supaya
-    // build tetap jalan walau JSON-nya belum memuat web client ID (muncul pesan konfigurasi).
+    // oauth_client web di google-services.json. Dibaca lewat referensi statis
+    // R.string.default_web_client_id (bukan getIdentifier) supaya resource shrinker
+    // otomatis mempertahankannya di APK release — getIdentifier() tidak terdeteksi
+    // AGP sehingga resource bisa hilang dan login Google gagal dengan pesan
+    // "Google Sign-In belum dikonfigurasi". (Cadangan juga di
+    // androidResources.keepSpecificResources di app/build.gradle.kts.)
     val webClientId = remember {
-        val resId = context.resources.getIdentifier(
-            "default_web_client_id", "string", context.packageName
-        )
-        if (resId != 0) context.getString(resId) else null
+        runCatching { context.getString(R.string.default_web_client_id) }.getOrNull()
     }
 
     // Pulihkan sesi Google yang masih aktif (misal app ditutup tanpa logout).
@@ -360,6 +362,23 @@ fun PinConnectScreen(
                     }
                 }
             }
+
+            // Label versi kecil di bawah layar login — biar mudah memastikan APK
+            // yang terpasang dan melaporkan versinya saat ada masalah.
+            Text(
+                text = stringResource(
+                    R.string.login_version_label,
+                    BuildConfig.VERSION_NAME,
+                    BuildConfig.VERSION_CODE
+                ),
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+            )
         }
     }
 }
