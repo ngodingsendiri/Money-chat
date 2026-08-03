@@ -1,5 +1,7 @@
 package com.ngodingsendiri.moneychat.ui.screens
 
+import android.content.Context
+import android.content.pm.PackageManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -43,6 +45,7 @@ import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.ngodingsendiri.moneychat.BuildConfig
 import com.ngodingsendiri.moneychat.R
+import java.security.MessageDigest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -143,10 +146,18 @@ fun PinConnectScreen(
                 // terdaftar di Firebase Console, atau app tidak dipercaya). Kode
                 // 10/15 = "Developer console is not set up correctly" — artinya
                 // sidik jari penandatangan belum terdaftar, bukan provider mati.
+                // Tampilkan SHA-1 asli APK ini supaya user tinggal salin & daftarkan
+                // di Firebase Console tanpa perlu mencari-cari.
+                val sha1 = signingCertSha1(context)
+                val hint = if (sha1 != null) {
+                    context.getString(R.string.google_err_sha1_hint, sha1)
+                } else {
+                    ""
+                }
                 authError = context.getString(
                     R.string.google_err_credential_provider,
                     e.type
-                )
+                ) + hint
             } catch (e: FirebaseAuthException) {
                 // Tampilkan penyebab sebenarnya supaya user tahu harus apa.
                 authError = when (e.errorCode) {
@@ -169,6 +180,21 @@ fun PinConnectScreen(
                 isSigningIn = false
             }
         }
+    }
+
+    /** SHA-1 sidik jari sertifikat penandatangan APK yang terpasang — persis
+     *  nilai yang harus didaftarkan di Firebase Console → Pengaturan project →
+     *  Aplikasi Anda → Tambahkan sidik jari. */
+    fun signingCertSha1(context: Context): String? = try {
+        val info = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_SIGNATURES
+        )
+        val cert = info.signatures.firstOrNull() ?: return null
+        val sha1 = MessageDigest.getInstance("SHA-1").digest(cert.toByteArray())
+        sha1.joinToString(":") { "%02X".format(it) }
+    } catch (e: Exception) {
+        null
     }
 
     fun signOutGoogle() {
