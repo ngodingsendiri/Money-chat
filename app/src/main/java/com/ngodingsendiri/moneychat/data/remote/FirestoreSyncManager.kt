@@ -23,7 +23,10 @@ data class CloudMessage(
     val isFinancial: Boolean = false,
     val detectedAmount: Double? = null,
     val detectedCategory: String? = null,
-    val detectedType: String? = null
+    val detectedType: String? = null,
+    val replyToSender: String? = null,
+    val replyToText: String? = null,
+    val editedAt: Long? = null
 )
 
 /** Representasi dokumen Firestore untuk transaksi. */
@@ -152,11 +155,16 @@ object FirestoreSyncManager {
                 detectedAmount = c.detectedAmount,
                 detectedCategory = c.detectedCategory,
                 detectedType = c.detectedType,
-                // Foto lampiran (imagePath) TIDAK dikirim ke cloud — file foto
-                // hanya ada di perangkat yang mengirimnya. Pertahankan path
-                // lokal supaya bubble foto nota tidak hilang saat listener
+                replyToSender = c.replyToSender,
+                replyToText = c.replyToText,
+                editedAt = c.editedAt,
+                // Lampiran (imagePath/filePath/fileName) TIDAK dikirim ke cloud —
+                // file hanya ada di perangkat yang mengirimnya. Pertahankan path
+                // lokal supaya bubble foto nota/dokumen tidak hilang saat listener
                 // Firestore mem-merge dokumen yang sama (mis. setelah restore).
                 imagePath = existing.imagePath,
+                filePath = existing.filePath,
+                fileName = existing.fileName,
                 cloudId = c.cloudId
             )
         } else {
@@ -168,6 +176,9 @@ object FirestoreSyncManager {
                 detectedAmount = c.detectedAmount,
                 detectedCategory = c.detectedCategory,
                 detectedType = c.detectedType,
+                replyToSender = c.replyToSender,
+                replyToText = c.replyToText,
+                editedAt = c.editedAt,
                 cloudId = c.cloudId
             )
         }
@@ -208,8 +219,9 @@ object FirestoreSyncManager {
     suspend fun syncMessage(message: ChatMessage) {
         val cid = message.cloudId ?: return
         runCatching {
+            // Firestore menolak nilai null di dalam map set() — filter dulu.
             messagesRef().document(cid).set(
-                mapOf(
+                nonNullMap(
                     "cloudId" to cid,
                     "sender" to message.sender,
                     "messageText" to message.messageText,
@@ -217,7 +229,10 @@ object FirestoreSyncManager {
                     "isFinancial" to message.isFinancial,
                     "detectedAmount" to message.detectedAmount,
                     "detectedCategory" to message.detectedCategory,
-                    "detectedType" to message.detectedType
+                    "detectedType" to message.detectedType,
+                    "replyToSender" to message.replyToSender,
+                    "replyToText" to message.replyToText,
+                    "editedAt" to message.editedAt
                 )
             ).await()
         }.onFailure { Log.w(TAG, "Sync pesan gagal: ${it.message}") }
@@ -232,7 +247,7 @@ object FirestoreSyncManager {
         val cid = transaction.cloudId ?: return
         runCatching {
             transactionsRef().document(cid).set(
-                mapOf(
+                nonNullMap(
                     "cloudId" to cid,
                     "type" to transaction.type,
                     "category" to transaction.category,
@@ -244,6 +259,13 @@ object FirestoreSyncManager {
                 )
             ).await()
         }.onFailure { Log.w(TAG, "Sync transaksi gagal: ${it.message}") }
+    }
+
+    /** Bangun map Firestore tanpa kunci bernilai null (null membuat set() error). */
+    private fun nonNullMap(vararg pairs: Pair<String, Any?>): Map<String, Any> {
+        val result = linkedMapOf<String, Any>()
+        pairs.forEach { (k, v) -> if (v != null) result[k] = v }
+        return result
     }
 
     suspend fun deleteTransaction(cloudId: String) {

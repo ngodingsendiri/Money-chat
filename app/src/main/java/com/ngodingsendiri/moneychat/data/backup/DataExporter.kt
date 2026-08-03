@@ -179,6 +179,7 @@ object DataExporter {
         for (i in 0 until msgArr.length()) {
             val o = msgArr.getJSONObject(i)
             val imagePath = o.optNullableString("imagePath")
+            val filePath = o.optNullableString("filePath")
             messages.add(
                 ChatMessage(
                     sender = o.optString("sender", ""),
@@ -188,9 +189,14 @@ object DataExporter {
                     detectedAmount = o.optNullableDouble("detectedAmount"),
                     detectedCategory = o.optNullableString("detectedCategory"),
                     detectedType = o.optNullableString("detectedType"),
-                    // Foto lampiran lokal tidak ikut di-backup; referensi yang file-nya
+                    // Lampiran lokal tidak ikut di-backup; referensi yang file-nya
                     // sudah tidak ada dibuang biar tidak muncul bubble rusak.
                     imagePath = imagePath?.takeIf { File(it).exists() },
+                    filePath = filePath?.takeIf { File(it).exists() },
+                    fileName = o.optNullableString("fileName"),
+                    replyToSender = o.optNullableString("replyToSender"),
+                    replyToText = o.optNullableString("replyToText"),
+                    editedAt = o.optNullableLong("editedAt"),
                     cloudId = o.optNullableString("cloudId")
                 )
             )
@@ -220,6 +226,11 @@ object DataExporter {
             .putOpt("detectedCategory", m.detectedCategory)
             .putOpt("detectedType", m.detectedType)
             .putOpt("imagePath", m.imagePath)
+            .putOpt("filePath", m.filePath)
+            .putOpt("fileName", m.fileName)
+            .putOpt("replyToSender", m.replyToSender)
+            .putOpt("replyToText", m.replyToText)
+            .putOpt("editedAt", m.editedAt)
             .putOpt("cloudId", m.cloudId)
 
     // JSONObject.opt* di Android bisa melempar IllegalArgumentException kalau

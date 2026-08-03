@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatMessage::class, FinancialTransaction::class],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -43,6 +43,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v4 -> v5: balasan (reply), file dokumen (PDF), dan penanda pesan diedit
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN replyToSender TEXT")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN replyToText TEXT")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN filePath TEXT")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN fileName TEXT")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN editedAt INTEGER")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -50,7 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "keuangan_pasutri_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

@@ -19,5 +19,10 @@ data class ChatMessage(
     val detectedCategory: String? = null,
     val detectedType: String? = null, // "PENGELUARAN" or "PEMASUKAN"
     val imagePath: String? = null, // path file foto lampiran (nota belanja) di penyimpanan internal
+    val filePath: String? = null, // path file dokumen (PDF/invoice/nota) di penyimpanan internal
+    val fileName: String? = null, // nama asli file dokumen untuk ditampilkan di bubble
+    val replyToSender: String? = null, // snapshot pengirim pesan yang dibalas (balasan via swipe)
+    val replyToText: String? = null, // snapshot isi pesan yang dibalas
+    val editedAt: Long? = null, // timestamp terakhir diedit (null = belum pernah diedit)
     val cloudId: String? = null // ID dokumen Firestore (unik lintas perangkat)
 )

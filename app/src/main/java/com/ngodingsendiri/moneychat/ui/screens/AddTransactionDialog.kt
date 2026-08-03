@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 
@@ -55,9 +56,10 @@ fun AddTransactionDialog(
     var amountText by remember {
         mutableStateOf(transaction?.let { formatAmountInput(it.amount) } ?: "")
     }
+    // "Dicatat oleh" diisi otomatis dari akun yang sedang login (initialLoggedBy)
     var description by remember { mutableStateOf(transaction?.description ?: "") }
-    var loggedBy by remember {
-        mutableStateOf(transaction?.loggedBy ?: initialLoggedBy ?: "Bendahara")
+    val loggedBy = remember {
+        transaction?.loggedBy ?: initialLoggedBy ?: "Bendahara"
     }
 
     val categories = listOf(
@@ -79,13 +81,16 @@ fun AddTransactionDialog(
     }
     var expandedCategoryMenu by remember { mutableStateOf(false) }
 
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Surface(
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.95f)
                 .padding(16.dp)
         ) {
             Column(
@@ -199,33 +204,6 @@ fun AddTransactionDialog(
                                 }
                             )
                         }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Logged By Toggle
-                Text(
-                    text = stringResource(R.string.add_logged_by),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    val roles = listOf(
-                        stringResource(R.string.role_bendahara),
-                        stringResource(R.string.role_anggota),
-                        stringResource(R.string.role_ketua)
-                    )
-                    roles.forEach { r ->
-                        FilterChip(
-                            selected = loggedBy == r,
-                            onClick = { loggedBy = r },
-                            label = { Text(r) },
-                            modifier = Modifier.weight(1f)
-                        )
                     }
                 }
 

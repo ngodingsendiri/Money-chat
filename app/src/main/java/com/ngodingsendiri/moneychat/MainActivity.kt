@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.ChatBubble
@@ -40,7 +41,8 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.PieChart
-import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Pin
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.SystemUpdate
@@ -57,6 +59,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -75,10 +78,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -90,6 +96,7 @@ import com.ngodingsendiri.moneychat.R
 import com.ngodingsendiri.moneychat.data.backup.DriveBackupFile
 import com.ngodingsendiri.moneychat.data.backup.DriveBackupManager
 import com.ngodingsendiri.moneychat.data.backup.DriveConsentRequired
+import com.ngodingsendiri.moneychat.data.local.FinancialTransaction
 import com.ngodingsendiri.moneychat.ui.MainViewModel
 import com.ngodingsendiri.moneychat.ui.screens.AddTransactionDialog
 import com.ngodingsendiri.moneychat.ui.screens.AiReportDialog
@@ -145,6 +152,9 @@ class MainActivity : ComponentActivity() {
                 var showGeminiKeyDialog by remember { mutableStateOf(false) }
                 var showOpenRouterKeyDialog by remember { mutableStateOf(false) }
                 var showConfirmClearDialog by remember { mutableStateOf(false) }
+                var showPinDialog by remember { mutableStateOf(false) }
+                var editTarget by remember { mutableStateOf<FinancialTransaction?>(null) }
+                val clipboard = LocalClipboardManager.current
 
                 var workspacePin by remember { mutableStateOf(prefs.getString("workspace_pin", null)) }
                 var userName by remember { mutableStateOf(prefs.getString("user_name", null)) }
@@ -190,6 +200,35 @@ class MainActivity : ComponentActivity() {
                             prefs.edit().putLong("last_update_check", System.currentTimeMillis()).apply()
                             if (GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
                                 updateInfo = release
+                            }
+                        }
+                    }
+                }
+                // Backup otomatis (menyerupai WhatsApp): sekali setiap 24 jam saat app dibuka,
+                // bila sudah login & pernah menyetujui akses Google Drive. Berjalan diam-diam;
+                // kalau belum pernah menyetujui konsen Drive, dilewati tanpa dialog.
+                LaunchedEffect(workspacePin, firebaseReady) {
+                    val pin = workspacePin
+                    if (pin == null || !firebaseReady) return@LaunchedEffect
+                    val last = prefs.getLong("last_auto_backup", 0L)
+                    if (System.currentTimeMillis() - last > 24 * 60 * 60 * 1000L) {
+                        runCatching {
+                            val email = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email
+                            if (email == null) return@runCatching
+                            val token = try {
+                                DriveBackupManager.getAccessToken(context, email)
+                            } catch (e: DriveConsentRequired) {
+                                return@runCatching
+                            } catch (e: Exception) {
+                                return@runCatching
+                            }
+                            val json = viewModel.buildBackupJson()
+                            val ok = DriveBackupManager.uploadBackup(
+                                context, token, "MoneyChat-backup-${timestampForFile()}.json", json
+                            )
+                            if (ok) {
+                                DriveBackupManager.pruneOldBackups(context, token, 5)
+                                prefs.edit().putLong("last_auto_backup", System.currentTimeMillis()).apply()
                             }
                         }
                     }
@@ -265,6 +304,7 @@ class MainActivity : ComponentActivity() {
                             val ok = DriveBackupManager.uploadBackup(context, token, fileName, json)
                             if (ok) {
                                 DriveBackupManager.pruneOldBackups(context, token, 5)
+                                prefs.edit().putLong("last_auto_backup", System.currentTimeMillis()).apply()
                                 backupMessage = context.getString(R.string.backup_success, fileName)
                             } else {
                                 backupMessage = context.getString(R.string.backup_failed)
@@ -353,7 +393,7 @@ class MainActivity : ComponentActivity() {
                                         Box {
                                             IconButton(onClick = { showSettingsMenu = true }) {
                                                 Icon(
-                                                    imageVector = Icons.Rounded.MoreVert,
+                                                    imageVector = Icons.Rounded.Settings,
                                                     contentDescription = stringResource(R.string.action_settings),
                                                     tint = MaterialTheme.colorScheme.onSurface
                                                 )
@@ -366,6 +406,16 @@ class MainActivity : ComponentActivity() {
                                                     text = { Text(stringResource(R.string.menu_version, BuildConfig.VERSION_NAME)) },
                                                     onClick = {},
                                                     enabled = false
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(R.string.menu_pin)) },
+                                                    onClick = {
+                                                        showSettingsMenu = false
+                                                        showPinDialog = true
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(imageVector = Icons.Rounded.Pin, contentDescription = null)
+                                                    }
                                                 )
                                                 DropdownMenuItem(
                                                     text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
@@ -506,14 +556,14 @@ class MainActivity : ComponentActivity() {
                                         }
                                     },
                                     colors = TopAppBarDefaults.topAppBarColors(
-                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
                                         titleContentColor = MaterialTheme.colorScheme.onSurface,
                                         actionIconContentColor = MaterialTheme.colorScheme.onSurface
                                     )
                                 )
                             },
                             bottomBar = {
-                                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)) {
+                                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)) {
                                     NavigationBarItem(
                                         selected = selectedTab == 0,
                                         onClick = { selectedTab = 0 },
@@ -569,7 +619,12 @@ class MainActivity : ComponentActivity() {
                                             messages = messages,
                                             activeSender = activeSender,
                                             isAiThinking = isAiThinking,
-                                            onSendMessage = { text, imagePath -> viewModel.sendMessage(text, imagePath) },
+                                            onSendMessage = { text, imagePath, filePath, fileName, replyToSender, replyToText ->
+                                                viewModel.sendMessage(
+                                                    text, imagePath, filePath, fileName, replyToSender, replyToText
+                                                )
+                                            },
+                                            onEditMessage = { id, newText -> viewModel.editMessage(id, newText) },
                                             onAskAiClicked = { viewModel.askAiInChat(it) },
                                             onDeleteMessage = { viewModel.deleteChatMessage(it) }
                                         )
@@ -580,8 +635,15 @@ class MainActivity : ComponentActivity() {
                                             totalExpense = totalExpense,
                                             isAuditLoading = isAuditLoading,
                                             onGenerateAudit = { viewModel.generateAiAuditReport() },
-                                            onAddTransactionClicked = { showAddDialog = true },
-                                            onDeleteTransaction = { viewModel.deleteTransaction(it) }
+                                            onAddTransactionClicked = {
+                                                editTarget = null
+                                                showAddDialog = true
+                                            },
+                                            onDeleteTransaction = { viewModel.deleteTransaction(it) },
+                                            onEditTransaction = {
+                                                editTarget = it
+                                                showAddDialog = true
+                                            }
                                         )
                                     }
                                 }
@@ -590,9 +652,22 @@ class MainActivity : ComponentActivity() {
                             // Dialogs
                             if (showAddDialog) {
                                 AddTransactionDialog(
-                                    onDismiss = { showAddDialog = false },
+                                    transaction = editTarget,
+                                    initialLoggedBy = userName,
+                                    onDismiss = {
+                                        showAddDialog = false
+                                        editTarget = null
+                                    },
                                     onConfirm = { tx ->
-                                        viewModel.addManualTransaction(tx.type, tx.category, tx.amount, tx.description, tx.loggedBy)
+                                        if (editTarget != null) {
+                                            viewModel.updateTransaction(tx)
+                                        } else {
+                                            viewModel.addManualTransaction(
+                                                tx.type, tx.category, tx.amount, tx.description, tx.loggedBy
+                                            )
+                                        }
+                                        showAddDialog = false
+                                        editTarget = null
                                     }
                                 )
                             }
@@ -621,6 +696,57 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putString("openrouter_api_key", newKey).apply()
                                         openRouterKey = newKey
                                         showOpenRouterKeyDialog = false
+                                    }
+                                )
+                            }
+
+                            if (showPinDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showPinDialog = false },
+                                    icon = { Icon(imageVector = Icons.Rounded.Pin, contentDescription = null) },
+                                    title = { Text(stringResource(R.string.menu_pin)) },
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = stringResource(R.string.pin_settings_hint),
+                                                fontSize = 13.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(modifier = Modifier.height(14.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = workspacePin ?: "-",
+                                                    style = MaterialTheme.typography.headlineMedium,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                    letterSpacing = 8.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(vertical = 12.dp)
+                                                )
+                                            }
+                                        }
+                                    },
+                                    confirmButton = {
+                                        TextButton(
+                                            onClick = {
+                                                workspacePin?.let {
+                                                    clipboard.setText(AnnotatedString(it))
+                                                    backupMessage = context.getString(R.string.pin_copied)
+                                                }
+                                                showPinDialog = false
+                                            }
+                                        ) {
+                                            Text(stringResource(R.string.pin_settings_copy))
+                                        }
+                                    },
+                                    dismissButton = {
+                                        TextButton(onClick = { showPinDialog = false }) {
+                                            Text(stringResource(R.string.action_cancel))
+                                        }
                                     }
                                 )
                             }

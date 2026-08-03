@@ -108,14 +108,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         repository.stopCloudSync()
     }
 
-    fun sendMessage(text: String, imagePath: String? = null) {
-        if (text.isBlank() && imagePath == null) return
+    fun sendMessage(
+        text: String,
+        imagePath: String? = null,
+        filePath: String? = null,
+        fileName: String? = null,
+        replyToSender: String? = null,
+        replyToText: String? = null
+    ) {
+        if (text.isBlank() && imagePath == null && filePath == null) return
         val currentSender = _activeSender.value
         viewModelScope.launch {
             try {
-                repository.sendMessage(currentSender, text.trim(), imagePath)
+                repository.sendMessage(
+                    currentSender, text.trim(), imagePath, filePath, fileName, replyToSender, replyToText
+                )
             } catch (e: Exception) {
                 Log.w("MainViewModel", "Operasi gagal", e)
+            }
+        }
+    }
+
+    fun editMessage(messageId: Long, newText: String) {
+        if (newText.isBlank()) return
+        viewModelScope.launch {
+            try {
+                repository.editMessage(messageId, newText.trim())
+            } catch (e: Exception) {
+                Log.w("MainViewModel", "Edit pesan gagal", e)
             }
         }
     }

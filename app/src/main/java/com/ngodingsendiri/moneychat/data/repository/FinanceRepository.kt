@@ -38,14 +38,27 @@ class FinanceRepository(
         FirestoreSyncManager.stop()
     }
 
-    suspend fun sendMessage(sender: String, messageText: String, imagePath: String? = null) {
+    suspend fun sendMessage(
+        sender: String,
+        messageText: String,
+        imagePath: String? = null,
+        filePath: String? = null,
+        fileName: String? = null,
+        replyToSender: String? = null,
+        replyToText: String? = null
+    ) {
         withContext(Dispatchers.IO) {
-        // 1. Insert user chat message (cloudId unik lintas perangkat; imagePath = foto nota lokal)
+        // 1. Insert user chat message (cloudId unik lintas perangkat; imagePath = foto
+        //    nota lokal; filePath/fileName = dokumen; replyTo* = pesan yang dibalas)
         val initialMsg = ChatMessage(
             sender = sender,
             messageText = messageText,
             timestamp = System.currentTimeMillis(),
             imagePath = imagePath,
+            filePath = filePath,
+            fileName = fileName,
+            replyToSender = replyToSender,
+            replyToText = replyToText,
             cloudId = UUID.randomUUID().toString()
         )
         val msgId = chatMessageDao.insertMessage(initialMsg)
@@ -53,7 +66,8 @@ class FinanceRepository(
         // Get recent context
         val recentList = chatMessageDao.getAllMessages().first().takeLast(10)
 
-        // 2. Process message with AI Parser silently in background (foto nota ikut dibaca AI)
+        // 2. Process message with AI Parser silently in background (foto nota ikut
+        //    dibaca AI; file PDF hanya dilampirkan — teks caption tetap diparse)
         val aiResult = GeminiService.parseChatMessage(messageText, sender, recentList, imagePath)
 
         var finalMsg = initialMsg.copy(id = msgId)
@@ -91,6 +105,76 @@ class FinanceRepository(
         // NO AUTOMATIC AI CHAT BUBBLE HERE! Chat stays clean between Husband & Wife.
     }
         }
+
+    /**
+     * Edit isi pesan yang sudah terkirim. Teks baru diparse ulang oleh AI dan:
+     * - kalau sekarang jadi transaksi → buat transaksi baru,
+     * - kalau tetap transaksi → perbarui transaksi lama (Rekap ikut berubah),
+     * - kalau sudah bukan transaksi lagi → transaksi terkait dihapus.
+     */
+    suspend fun editMessage(messageId: Long, newText: String) {
+        withContext(Dispatchers.IO) {
+            val existing = chatMessageDao.getById(messageId) ?: return@withContext
+            val recentList = chatMessageDao.getAllMessages().first().takeLast(10)
+
+            // Parse ulang dengan AI (foto nota tetap ikut dibaca kalau ada)
+            val aiResult = GeminiService.parseChatMessage(
+                newText, existing.sender, recentList, existing.imagePath
+            )
+            val isFinancial = aiResult.containsTransaction && aiResult.amount != null && aiResult.amount > 0
+
+            val updated = existing.copy(
+                messageText = newText,
+                editedAt = System.currentTimeMillis(),
+                isFinancial = isFinancial,
+                detectedAmount = if (isFinancial) aiResult.amount else null,
+                detectedCategory = if (isFinancial) aiResult.category else null,
+                detectedType = if (isFinancial) aiResult.type else null
+            )
+            chatMessageDao.updateMessage(updated)
+
+            // Transaksi yang terkait dengan pesan ini dicari lewat id lokal pesan
+            // (FinancialTransaction.chatMessageId menyimpan id ChatMessage).
+            val existingTx = transactionDao.getByChatMessageId(existing.id)
+            when {
+                isFinancial && existingTx != null -> {
+                    // Tetap transaksi → perbarui data Rekap
+                    val newTx = existingTx.copy(
+                        type = updated.detectedType ?: existingTx.type,
+                        category = updated.detectedCategory ?: existingTx.category,
+                        amount = updated.detectedAmount ?: existingTx.amount,
+                        description = newText,
+                        loggedBy = existing.sender
+                    )
+                    transactionDao.updateTransaction(newTx)
+                    FirestoreSyncManager.syncTransaction(newTx)
+                }
+                isFinancial && existingTx == null -> {
+                    // Baru jadi transaksi → buat di Rekap
+                    val trans = FinancialTransaction(
+                        type = updated.detectedType ?: "PENGELUARAN",
+                        category = updated.detectedCategory ?: "Lain-lain",
+                        amount = updated.detectedAmount ?: 0.0,
+                        description = newText,
+                        loggedBy = existing.sender,
+                        timestamp = existing.timestamp,
+                        chatMessageId = messageId,
+                        cloudId = UUID.randomUUID().toString()
+                    )
+                    transactionDao.insertTransaction(trans)
+                    FirestoreSyncManager.syncTransaction(trans)
+                }
+                !isFinancial && existingTx != null -> {
+                    // Bukan transaksi lagi → hapus dari Rekap
+                    transactionDao.deleteTransaction(existingTx)
+                    existingTx.cloudId?.let { FirestoreSyncManager.deleteTransaction(it) }
+                }
+                else -> { /* tidak ada perubahan transaksi */ }
+            }
+
+            FirestoreSyncManager.syncMessage(updated)
+        }
+    }
 
     suspend fun askAiInChat(prompt: String): String {
         return withContext(Dispatchers.IO) {

@@ -1,7 +1,10 @@
 package com.ngodingsendiri.moneychat.ui.screens
 
+import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -16,6 +19,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,7 +51,10 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.Reply
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Receipt
@@ -82,6 +89,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -90,6 +98,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -127,7 +136,8 @@ fun ChatScreen(
     activeSender: String,
     isAiThinking: Boolean,
     quickSuggestions: List<String>,
-    onSendMessage: (String, String?) -> Unit,
+    onSendMessage: (String, String?, String?, String?, String?, String?) -> Unit,
+    onEditMessage: (Long, String) -> Unit,
     onAskAiClicked: (String) -> Unit,
     onDeleteMessage: (Long) -> Unit
 ) {
@@ -135,6 +145,10 @@ fun ChatScreen(
     var inputText by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
     var pendingImagePath by remember { mutableStateOf<String?>(null) }
+    var pendingFilePath by remember { mutableStateOf<String?>(null) }
+    var pendingFileName by remember { mutableStateOf<String?>(null) }
+    var replyTarget by remember { mutableStateOf<ChatMessage?>(null) }
+    var editingMessage by remember { mutableStateOf<ChatMessage?>(null) }
     var cameraTempUri by remember { mutableStateOf<Uri?>(null) }
     var attachMenuOpen by remember { mutableStateOf(false) }
 
@@ -180,6 +194,19 @@ fun ChatScreen(
             }
         }
     }
+    val pickPdfLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                val saved = ImageFileUtil.saveFileFromUri(context, uri)
+                if (saved != null) {
+                    pendingFilePath = saved.path
+                    pendingFileName = saved.name
+                }
+            }
+        }
+    }
 
     val todayLabel = stringResource(R.string.today_label)
     val yesterdayLabel = stringResource(R.string.yesterday_label)
@@ -215,10 +242,18 @@ fun ChatScreen(
     val sendMessage = {
         val text = inputText.trim()
         val image = pendingImagePath
-        if (text.isNotBlank() || image != null) {
-            onSendMessage(text, image)
+        val file = pendingFilePath
+        val fileName = pendingFileName
+        if (text.isNotBlank() || image != null || file != null) {
+            onSendMessage(
+                text, image, file, fileName,
+                replyTarget?.sender, replyTarget?.messageText
+            )
             inputText = ""
             pendingImagePath = null
+            pendingFilePath = null
+            pendingFileName = null
+            replyTarget = null
         }
     }
 
@@ -288,12 +323,32 @@ fun ChatScreen(
                                     currentActiveSender = activeSender,
                                     showHeader = row.showSenderHeader,
                                     onLongPress = { menuOpen = true },
+                                    onReply = { replyTarget = msg },
+                                    onOpenFile = { openAttachedFile(context, msg) },
                                     modifier = Modifier.animateItem()
                                 )
                                 DropdownMenu(
                                     expanded = menuOpen,
                                     onDismissRequest = { menuOpen = false }
                                 ) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.chat_reply)) },
+                                        leadingIcon = { Icon(Icons.Rounded.Reply, contentDescription = null) },
+                                        onClick = {
+                                            replyTarget = msg
+                                            menuOpen = false
+                                        }
+                                    )
+                                    if (msg.sender == activeSender && msg.sender != "AI") {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.chat_edit)) },
+                                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                                            onClick = {
+                                                editingMessage = msg
+                                                menuOpen = false
+                                            }
+                                        )
+                                    }
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.chat_copy)) },
                                         leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
@@ -333,6 +388,96 @@ fun ChatScreen(
                     suggestions = quickSuggestions,
                     onSuggestionClicked = { inputText = it }
                 )
+            }
+
+            // Bar balasan (reply) — muncul saat user membalas pesan via swipe/menu
+            AnimatedVisibility(
+                visible = replyTarget != null,
+                enter = slideInVertically(initialOffsetY = { it / 3 }, animationSpec = tween(240)) + fadeIn(animationSpec = tween(240)),
+                exit = slideOutVertically(targetOffsetY = { it / 3 }, animationSpec = tween(180)) + fadeOut(animationSpec = tween(180))
+            ) {
+                val target = replyTarget
+                if (target != null) {
+                    val snippet = target.messageText.ifBlank {
+                        target.fileName ?: target.imagePath?.let { "📷" } ?: ""
+                    }
+                    Surface(color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Reply,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.chat_reply_label, target.sender),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = snippet,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(onClick = { replyTarget = null }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = stringResource(R.string.chat_reply_cancel),
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Pratinjau dokumen (PDF) sebelum dikirim
+            AnimatedVisibility(
+                visible = pendingFilePath != null,
+                enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { it }, animationSpec = tween(200)),
+                exit = fadeOut(animationSpec = tween(150)) + slideOutVertically(targetOffsetY = { it }, animationSpec = tween(150))
+            ) {
+                Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PictureAsPdf,
+                            contentDescription = null,
+                            tint = ExpenseRed,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = pendingFileName ?: stringResource(R.string.chat_pdf_attached),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { pendingFilePath = null; pendingFileName = null }) {
+                            Icon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.chat_image_remove)
+                            )
+                        }
+                    }
+                }
             }
 
             // Pratinjau foto lampiran (nota belanja) sebelum dikirim
@@ -428,6 +573,14 @@ fun ChatScreen(
                                     pickGalleryLauncher.launch("image/*")
                                 }
                             )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.chat_send_pdf)) },
+                                leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) },
+                                onClick = {
+                                    attachMenuOpen = false
+                                    pickPdfLauncher.launch(arrayOf("application/pdf"))
+                                }
+                            )
                         }
                     }
 
@@ -478,7 +631,7 @@ fun ChatScreen(
                         modifier = Modifier.padding(bottom = 2.dp)
                     ) {
                         IconButton(
-                            enabled = inputText.isNotBlank() || pendingImagePath != null,
+                            enabled = inputText.isNotBlank() || pendingImagePath != null || pendingFilePath != null,
                             onClick = sendMessage,
                             modifier = Modifier
                                 .size(48.dp)
@@ -543,6 +696,64 @@ fun ChatScreen(
                 }
             )
         }
+
+        // Dialog edit pesan
+        editingMessage?.let { msg ->
+            var editText by remember(msg.id) { mutableStateOf(msg.messageText) }
+            AlertDialog(
+                onDismissRequest = { editingMessage = null },
+                title = { Text(stringResource(R.string.chat_edit_title)) },
+                text = {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.chat_edit_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = editText,
+                            onValueChange = { if (it.length <= MAX_MESSAGE_LENGTH) editText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            maxLines = 5
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = editText.isNotBlank(),
+                        onClick = {
+                            onEditMessage(msg.id, editText)
+                            editingMessage = null
+                        }
+                    ) {
+                        Text(stringResource(R.string.chat_save_edit))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { editingMessage = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
+        }
+    }
+}
+
+/** Buka file dokumen terkirim (PDF/invoice) lewat aplikasi pembaca eksternal. */
+private fun openAttachedFile(context: Context, message: ChatMessage) {
+    val path = message.filePath ?: return
+    val file = File(path)
+    if (!file.exists()) return
+    runCatching {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(intent)
+    }.onFailure {
+        Toast.makeText(context, context.getString(R.string.chat_file_open_failed), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -575,6 +786,8 @@ fun ChatMessageBubble(
     currentActiveSender: String,
     showHeader: Boolean = true,
     onLongPress: (() -> Unit)? = null,
+    onReply: (() -> Unit)? = null,
+    onOpenFile: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isAi = message.sender == "AI"
@@ -587,19 +800,20 @@ fun ChatMessageBubble(
         else -> Alignment.Start
     }
 
+    // Warna bubble lebih lembut & konsisten dengan tema (container tones)
     val bubbleColor = when {
-        isAi -> if (isDark) Color(0xFF331650) else AiPurpleLight
-        isMe -> MaterialTheme.colorScheme.primary
+        isAi -> if (isDark) Color(0xFF2A2140) else AiPurpleLight
+        isMe -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
     val textColor = when {
-        isMe -> MaterialTheme.colorScheme.onPrimary
+        isMe -> MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
 
     val timeColor = when {
-        isMe -> MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f)
+        isMe -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
     }
 
@@ -619,6 +833,10 @@ fun ChatMessageBubble(
 
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.forLanguageTag("id-ID")) }
     val formattedTime = timeFormat.format(Date(message.timestamp))
+    // Penanda pesan pernah diedit (mis. "14:05 • diedit")
+    val timeDisplay = if (message.editedAt != null) {
+        "$formattedTime • ${stringResource(R.string.chat_edited)}"
+    } else formattedTime
 
     // Dekode foto lampiran untuk ditampilkan di bubble (disampling, aman memori)
     val imagePath = message.imagePath
@@ -664,7 +882,7 @@ fun ChatMessageBubble(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = formattedTime,
+                    text = timeDisplay,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -686,31 +904,119 @@ fun ChatMessageBubble(
                     onClick = {},
                     onLongClick = { onLongPress?.invoke() }
                 )
+                .then(
+                    if (onReply != null) {
+                        // Geser bubble ke kanan untuk membalas (pola app chat modern)
+                        Modifier.pointerInput(Unit) {
+                            var total = 0f
+                            detectHorizontalDragGestures(
+                                onDragStart = { total = 0f },
+                                onHorizontalDrag = { change, dragAmount ->
+                                    total += dragAmount
+                                    change.consume()
+                                },
+                                onDragEnd = { if (total > 70.dp.toPx()) onReply() }
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
+                )
                 .testTag("chat_bubble_${message.id}")
         ) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                // Foto lampiran (nota belanja) ditampilkan di atas teks pesan
+                // Kutipan pesan yang dibalas (swipe kanan / menu Balas)
+                message.replyToText?.takeIf { it.isNotBlank() }?.let { quoted ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = bubbleColor.copy(alpha = 0.8f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(
+                                text = message.replyToSender ?: "",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = senderColor
+                            )
+                            Text(
+                                text = quoted,
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                color = textColor.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // File dokumen (PDF/invoice/nota) — ketuk untuk membuka
+                if (message.filePath != null) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isMe) Color.White.copy(alpha = 0.2f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                        modifier = Modifier
+                            .widthIn(max = 230.dp)
+                            .combinedClickable(onClick = { onOpenFile?.invoke() })
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.PictureAsPdf,
+                                contentDescription = null,
+                                tint = if (isMe) Color.White else ExpenseRed,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = message.fileName ?: stringResource(R.string.chat_pdf_attached),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = textColor,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = stringResource(R.string.chat_pdf_attached),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = timeColor
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                // Foto lampiran (nota belanja) — proporsional, tidak memenuhi lebar chat
                 imageBitmap?.let { b ->
                     Image(
                         bitmap = b.asImageBitmap(),
                         contentDescription = stringResource(R.string.chat_image_desc),
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .widthIn(max = 220.dp)
                             .clip(RoundedCornerShape(12.dp)),
                         contentScale = ContentScale.Fit
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    if (message.messageText.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
                 }
 
-                Text(
-                    text = message.messageText,
-                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
-                    color = textColor
-                )
+                if (message.messageText.isNotBlank()) {
+                    Text(
+                        text = message.messageText,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                        color = textColor
+                    )
+                }
 
                 if (isMe) {
                     Text(
-                        text = formattedTime,
+                        text = timeDisplay,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = timeColor,
                         modifier = Modifier

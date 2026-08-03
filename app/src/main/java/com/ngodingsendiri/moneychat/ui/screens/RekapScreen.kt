@@ -2,8 +2,10 @@ package com.ngodingsendiri.moneychat.ui.screens
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +30,7 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Fastfood
 import androidx.compose.material.icons.rounded.HomeWork
 import androidx.compose.material.icons.rounded.MedicalServices
@@ -37,9 +40,12 @@ import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Wallet
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
@@ -50,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -100,11 +107,13 @@ fun RekapScreen(
     isAuditLoading: Boolean,
     onGenerateAudit: () -> Unit,
     onAddTransactionClicked: () -> Unit,
-    onDeleteTransaction: (FinancialTransaction) -> Unit
+    onDeleteTransaction: (FinancialTransaction) -> Unit,
+    onEditTransaction: (FinancialTransaction) -> Unit
 ) {
     val balance = totalIncome - totalExpense
 
     var selectedFilterTab by remember { mutableStateOf(0) } // 0: Semua, 1: Pengeluaran, 2: Pemasukan
+    var pendingDelete by remember { mutableStateOf<FinancialTransaction?>(null) }
 
     val filteredTransactions = remember(transactions, selectedFilterTab) {
         when (selectedFilterTab) {
@@ -396,11 +405,36 @@ fun RekapScreen(
                 items(filteredTransactions, key = { it.id }) { trans ->
                     TransactionItemCard(
                         transaction = trans,
-                        onDelete = { onDeleteTransaction(trans) },
+                        onDelete = { pendingDelete = trans },
+                        onEdit = { onEditTransaction(trans) },
                         modifier = Modifier.animateItem()
                     )
                 }
             }
+        }
+
+        // Konfirmasi hapus transaksi
+        pendingDelete?.let { tx ->
+            AlertDialog(
+                onDismissRequest = { pendingDelete = null },
+                title = { Text(stringResource(R.string.rekap_delete_title)) },
+                text = { Text(stringResource(R.string.rekap_delete_message)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            onDeleteTransaction(tx)
+                            pendingDelete = null
+                        }
+                    ) {
+                        Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDelete = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
         }
 
         // Floating Action Button for Fast Entry
@@ -649,10 +683,12 @@ fun CategoryProgressRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TransactionItemCard(
     transaction: FinancialTransaction,
     onDelete: () -> Unit,
+    onEdit: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isIncome = transaction.type == "PEMASUKAN"
@@ -676,14 +712,36 @@ fun TransactionItemCard(
         else -> stringResource(R.string.tag_other, transaction.loggedBy)
     }
 
+    // Long-press membuka menu aksi cepat (Edit / Hapus)
+    var menuOpen by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         shape = RoundedCornerShape(16.dp),
         modifier = modifier
             .fillMaxWidth()
+            .combinedClickable(
+                onClick = {},
+                onLongClick = { menuOpen = true }
+            )
             .testTag("transaction_item_${transaction.id}")
     ) {
+        DropdownMenu(
+            expanded = menuOpen,
+            onDismissRequest = { menuOpen = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.rekap_edit_desc)) },
+                leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                onClick = { menuOpen = false; onEdit() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.action_delete)) },
+                leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
+                onClick = { menuOpen = false; onDelete() }
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -766,7 +824,15 @@ fun TransactionItemCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Rounded.Edit,
+                        contentDescription = stringResource(R.string.rekap_edit_desc),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
