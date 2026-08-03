@@ -70,7 +70,11 @@ object DriveBackupManager {
             try {
                 GoogleAuthUtil.getToken(context, email, DRIVE_SCOPE)
             } catch (e: UserRecoverableAuthException) {
-                throw DriveConsentRequired(e.intent)
+                // e.intent bisa null di versi baru play-services — kalau null,
+                // cukup laporkan gagal (tidak ada layar konsen yang bisa ditampilkan).
+                val intent = e.intent
+                if (intent != null) throw DriveConsentRequired(intent)
+                throw IllegalStateException("Token Drive gagal: ${e.message}", e)
             } catch (e: GoogleAuthException) {
                 throw IllegalStateException("Token Drive gagal: ${e.message}", e)
             }
