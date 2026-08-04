@@ -30,8 +30,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.ChatBubble
@@ -383,13 +389,54 @@ class MainActivity : ComponentActivity() {
                         Scaffold(
                             containerColor = Color.Transparent,
                             topBar = {
+                                val uniqueSenders by remember(messages) {
+                                    derivedStateOf {
+                                        messages
+                                            .map { it.sender }
+                                            .filter { it != "AI" }
+                                            .distinct()
+                                            .take(4)
+                                    }
+                                }
                                 TopAppBar(
                                     title = {
-                                        Text(
-                                            text = stringResource(R.string.topbar_title),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 17.sp
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = 0.dp)
+                                        ) {
+                                            StackedAvatars(
+                                                senders = uniqueSenders.ifEmpty {
+                                                    userName?.let { listOf(it) } ?: emptyList()
+                                                },
+                                                modifier = Modifier.padding(end = 10.dp)
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = stringResource(R.string.topbar_title),
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 16.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                if (uniqueSenders.size > 1) {
+                                                    Text(
+                                                        text = "${uniqueSenders.size} anggota",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 11.sp
+                                                    )
+                                                } else if (uniqueSenders.size == 1) {
+                                                    Text(
+                                                        text = uniqueSenders.first(),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 11.sp,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                            }
+                                        }
                                     },
                                     actions = {
                                         IconButton(onClick = { showSettingsSheet = true }) {
@@ -1050,4 +1097,71 @@ private fun installApk(context: Context, file: File) {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     context.startActivity(intent)
+}
+
+/**
+ * Avatar bertumpuk (stacked) bergaya Twitter/X group chat.
+ * Setiap avatar adalah lingkaran berwarna unik dari hash nama pengirim,
+ * dengan inisial huruf di tengah. Avatar berikutnya sedikit overlap ke kiri.
+ */
+@Composable
+private fun StackedAvatars(
+    senders: List<String>,
+    modifier: Modifier = Modifier,
+    avatarSize: Int = 32,
+    overlapDp: Int = 10
+) {
+    if (senders.isEmpty()) return
+    val show = senders.take(3)
+    val totalWidth = (avatarSize + (show.size - 1) * (avatarSize - overlapDp)).dp
+
+    Box(
+        modifier = modifier
+            .width(totalWidth)
+            .height(avatarSize.dp)
+    ) {
+        show.forEachIndexed { index, name ->
+            val avatarColor = avatarColorFor(name)
+            val initials = name.take(2).uppercase()
+            Box(
+                modifier = Modifier
+                    .size(avatarSize.dp)
+                    .offset(x = (index * (avatarSize - overlapDp)).dp)
+                    .zIndex((show.size - index).toFloat())
+                    .clip(CircleShape)
+                    .drawBehind { drawCircle(color = avatarColor) },
+                contentAlignment = Alignment.Center
+            ) {
+                // White border ring
+                Box(
+                    modifier = Modifier
+                        .size(avatarSize.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+                Text(
+                    text = initials,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (avatarSize / 2.8).sp,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+/** Warna avatar deterministik berdasarkan hash nama — konsisten antar sesi. */
+private fun avatarColorFor(name: String): Color {
+    val palette = listOf(
+        Color(0xFF6C3DE8), // indigo
+        Color(0xFF00A878), // teal
+        Color(0xFFE84393), // pink
+        Color(0xFFFF8C42), // orange
+        Color(0xFF3D9BE9), // sky blue
+        Color(0xFFB23A48), // crimson
+        Color(0xFF4CAF50), // green
+        Color(0xFF9C27B0), // purple
+    )
+    return palette[Math.abs(name.hashCode()) % palette.size]
 }
