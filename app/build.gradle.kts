@@ -11,7 +11,7 @@ plugins {
 // E1: versionName dari git tag (via CI property) atau default.
 // CI bisa set via -Papp.version=X.Y.Z. Local build fallback = r1.0.0.
 // Skema rilis: tag r* (r1.0.0, r1.0.1, ...) — lihat GitHubUpdateChecker.
-private val appVersion: String = project.findProperty("appVersion") as String? ?: "r1.0.0"
+private val appVersion: String = project.findProperty("appVersion") as String? ?: "r1.0.1"
 
 android {
   namespace = "com.startupmini.nyachat"
@@ -21,7 +21,7 @@ android {
     applicationId = "com.startupmini.nyachat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 20
+    versionCode = 21
     versionName = appVersion
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
