@@ -109,7 +109,7 @@ Salin SHA-1-nya ke Firebase Console (poin 2 di atas). Kalau kamu belum punya key
 ## 🛠️ Build dari Source
 
 ### Prasyarat
-- JDK 17
+- JDK 21 (wajib — compileSdk 36 & test Robolectric butuh Java 21; JDK 17 membuat unit test Robolectric gagal)
 - Android SDK (compileSdk 36)
 
 ### Langkah
