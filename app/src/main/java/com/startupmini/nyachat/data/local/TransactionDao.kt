@@ -13,6 +13,10 @@ interface TransactionDao {
     @Query("SELECT * FROM financial_transactions ORDER BY timestamp DESC")
     fun getAllTransactions(): Flow<List<FinancialTransaction>>
 
+    // REPLACE (bukan ABORT): dengan index unik cloudId, merge dari snapshot
+    // listener yang balapan harus KONVERGEN, bukan crash. Aman karena semua
+    // pemanggil upsert resolve baris lewat getByCloudId dulu (id lokal dijaga);
+    // restore menimpa tabel kosong, jadi primary key tidak pernah berubah diam-diam.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: FinancialTransaction): Long
 

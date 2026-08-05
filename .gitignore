@@ -29,3 +29,6 @@ keystore_creds.txt
 
 # Dependensi npm untuk lint firestore.rules (package-lock.json tetap di-commit)
 node_modules/
+
+# Cache tooling editor/agent (Qoder)
+.qoder/

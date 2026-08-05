@@ -53,7 +53,8 @@ data class CloudTransaction(
     val description: String = "",
     val loggedBy: String = "",
     val timestamp: Long = 0L,
-    val chatMessageId: Long? = null
+    val chatMessageId: Long? = null,
+    val editedAt: Long? = null
 )
 
 /** Status sinkronisasi nyata untuk indikator UI (P2-16). */
@@ -338,8 +339,24 @@ object FirestoreSyncManager {
         action()
     }
 
-    private suspend fun upsertMessage(dao: ChatMessageDao, c: CloudMessage) {
+    /**
+     * Waktu efektif untuk resolusi konflik: saat terakhir diedit, atau waktu
+     * dibuat kalau belum pernah diedit. Dipakai upsert supaya edit bersamaan
+     * di dua perangkat dimenangkan penulis terakhir berbasis WAKTU — bukan
+     * urutan tibanya snapshot listener.
+     */
+    internal fun effectiveSortTime(editedAt: Long?, timestamp: Long): Long = editedAt ?: timestamp
+
+    internal suspend fun upsertMessage(dao: ChatMessageDao, c: CloudMessage) {
         val existing = dao.getByCloudId(c.cloudId)
+        if (existing != null) {
+            // Last-writer-by-time: snapshot listener bisa tiba dalam urutan apa
+            // pun, jadi versi cloud yang lebih tua tidak boleh menimpa edit
+            // lokal yang lebih baru. Waktu sama → terima (data konvergen).
+            val localTime = effectiveSortTime(existing.editedAt, existing.timestamp)
+            val cloudTime = effectiveSortTime(c.editedAt, c.timestamp)
+            if (cloudTime < localTime) return
+        }
         val local = if (existing != null) {
             ChatMessage(
                 id = existing.id,
@@ -380,8 +397,15 @@ object FirestoreSyncManager {
         dao.insertMessage(local)
     }
 
-    private suspend fun upsertTransaction(dao: TransactionDao, c: CloudTransaction) {
+    internal suspend fun upsertTransaction(dao: TransactionDao, c: CloudTransaction) {
         val existing = dao.getByCloudId(c.cloudId)
+        if (existing != null) {
+            // Sama dengan upsertMessage — konflik edit transaksi dua perangkat
+            // diselesaikan berbasis waktu edit, bukan urutan listener.
+            val localTime = effectiveSortTime(existing.editedAt, existing.timestamp)
+            val cloudTime = effectiveSortTime(c.editedAt, c.timestamp)
+            if (cloudTime < localTime) return
+        }
         val local = if (existing != null) {
             FinancialTransaction(
                 id = existing.id,
@@ -391,6 +415,7 @@ object FirestoreSyncManager {
                 description = c.description,
                 loggedBy = c.loggedBy,
                 timestamp = c.timestamp,
+                editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
                 cloudId = c.cloudId
             )
@@ -402,6 +427,7 @@ object FirestoreSyncManager {
                 description = c.description,
                 loggedBy = c.loggedBy,
                 timestamp = c.timestamp,
+                editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
                 cloudId = c.cloudId
             )
@@ -489,6 +515,7 @@ object FirestoreSyncManager {
                     "description" to transaction.description,
                     "loggedBy" to transaction.loggedBy,
                     "timestamp" to transaction.timestamp,
+                    "editedAt" to transaction.editedAt,
                     "chatMessageId" to transaction.chatMessageId
                 )
             ).await()
@@ -542,14 +569,69 @@ object FirestoreSyncManager {
         false
     }
 
-    /** Hapus semua dokumen sebuah koleksi, per batch maks 400 (batas WriteBatch). */
-    private suspend fun deleteCollectionInBatches(ref: com.google.firebase.firestore.CollectionReference) {
-        ref.get().await().documents.chunked(400).forEach { chunk ->
+    /**
+     * Hapus semua dokumen sebuah koleksi, per batch maks 400 (batas WriteBatch).
+     * Query dibatasi per halaman ([com.google.firebase.firestore.Query.limit])
+     * dan diulang sampai koleksi kosong — get() tunggal tanpa pagination bisa
+     * terpangkas batas dokumen sehingga koleksi besar tidak terhapus semua.
+     * Guard [maxPages] mencegah loop tak berujung bila commit terus gagal.
+     */
+    private suspend fun deleteCollectionInBatches(
+        ref: com.google.firebase.firestore.CollectionReference,
+        maxPages: Int = 1_000
+    ) {
+        var pages = 0
+        while (pages < maxPages) {
+            val docs = ref.limit(500).get().await().documents
+            if (docs.isEmpty()) break
+            docs.chunked(400).forEach { chunk ->
+                val batch = db().batch()
+                chunk.forEach { batch.delete(it.reference) }
+                batch.commit().await()
+            }
+            pages++
+        }
+        if (pages >= maxPages) {
+            Log.w(TAG, "Hapus koleksi ${ref.path} berhenti di batas halaman ($maxPages) — mungkin belum bersih semua")
+        }
+    }
+
+    /**
+     * Hapus dokumen cloud yang TIDAK ada di backup — dipanggil restoreBackup
+     * SEBELUM push isi backup. Tanpa ini, dokumen lama bertahan di cloud dan
+     * muncul lagi di perangkat lain walau restore seharusnya mengganti seluruh
+     * data lokal + cloud.
+     */
+    suspend fun deleteAbsentFromBackup(
+        keptMessageCloudIds: Set<String>,
+        keptTransactionCloudIds: Set<String>
+    ) {
+        if (!canSync()) return
+        try {
+            deleteDocsAbsentFrom(messagesRef(), keptMessageCloudIds)
+            deleteDocsAbsentFrom(transactionsRef(), keptTransactionCloudIds)
+        } catch (e: Exception) {
+            Log.w(TAG, "Bersihkan dokumen cloud di luar backup gagal: ${e.message}")
+            onSyncFailure(e)
+        }
+    }
+
+    /** Hapus dokumen sebuah koleksi yang id-nya tidak termasuk isi backup, per batch 400. */
+    private suspend fun deleteDocsAbsentFrom(
+        ref: com.google.firebase.firestore.CollectionReference,
+        keptCloudIds: Set<String>
+    ) {
+        val docIds = ref.get().await().documents.map { it.id }
+        idsAbsentFromBackup(docIds, keptCloudIds).chunked(400).forEach { chunk ->
             val batch = db().batch()
-            chunk.forEach { batch.delete(it.reference) }
+            chunk.forEach { id -> batch.delete(ref.document(id)) }
             batch.commit().await()
         }
     }
+
+    /** Id dokumen cloud yang tidak termasuk isi backup — murni, mudah di-unit-test. */
+    internal fun idsAbsentFromBackup(cloudDocIds: Collection<String>, keptCloudIds: Set<String>): List<String> =
+        cloudDocIds.filterNot { it in keptCloudIds }
 
     // ---------- Antrian pending: simpan & kuras operasi yang gagal ----------
 

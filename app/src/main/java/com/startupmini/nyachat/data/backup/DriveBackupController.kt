@@ -3,7 +3,9 @@ package com.startupmini.nyachat.data.backup
 import android.content.Context
 import android.content.Intent
 import com.startupmini.nyachat.R
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +31,10 @@ import java.util.Locale
 class DriveBackupController(
     private val scope: CoroutineScope,
     private val context: Context,
-    private val driveApi: DriveBackupApi = DriveBackupManager
+    private val driveApi: DriveBackupApi = DriveBackupManager,
+    // Operasi Drive (termasuk KDF/enkripsi CPU-intensif) berjalan di IO supaya
+    // tidak membekukan UI; bisa di-inject test dispatcher untuk unit test.
+    private val workDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     // ===== Dependency yang di-wire ulang tiap komposisi =====
 
@@ -40,12 +45,14 @@ class DriveBackupController(
         { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.email }
     /** Membangun JSON backup lengkap (dari ViewModel). */
     var buildBackupJson: () -> String = { "" }
-    /** Parse JSON backup → BackupData (null kalau rusak/format masa depan). */
-    var parseRestore: (String) -> BackupData? = { null }
+    /** Parse JSON backup → BackupData (null kalau rusak/format masa depan/passphrase salah). */
+    var parseRestore: (String, String?) -> BackupData? = { _, _ -> null }
     /** Terapkan backup ke data lokal + cloud. */
     var restoreParsedBackup: suspend (BackupData) -> Boolean = { false }
     /** Dipanggil setiap backup berhasil (untuk menandai auto-backup terakhir). */
     var onSuccessfulBackup: () -> Unit = {}
+    /** Apakah enkripsi backup aktif (dari Pengaturan). */
+    var getEncryptionEnabled: () -> Boolean = { false }
 
     // ===== State UI =====
 
@@ -67,6 +74,17 @@ class DriveBackupController(
     private val _consentIntent = MutableStateFlow<Intent?>(null)
     val consentIntent: StateFlow<Intent?> = _consentIntent.asStateFlow()
 
+    /** Aksi yang sedang menunggu passphrase user (backup terenkripsi / restore
+     *  backup terenkripsi). Passphrase tidak pernah disimpan — hanya hidup di
+     *  memori selama alur ini. */
+    sealed class PassphrasePrompt {
+        data object Backup : PassphrasePrompt()
+        data class Restore(val payload: String) : PassphrasePrompt()
+    }
+
+    private val _passphrasePrompt = MutableStateFlow<PassphrasePrompt?>(null)
+    val passphrasePrompt: StateFlow<PassphrasePrompt?> = _passphrasePrompt.asStateFlow()
+
     /** Aksi yang diulang otomatis setelah user menyetujui konsen OAuth Drive. */
     private var pendingRetry: (() -> Unit)? = null
 
@@ -84,7 +102,11 @@ class DriveBackupController(
      */
     private fun launchOperation(block: suspend CoroutineScope.() -> Unit) {
         activeJob?.cancel()
-        val job = scope.launch {
+        val job = scope.launch(workDispatcher) {
+            // Daftar dulu dari dalam: pada dispatcher unconfined (unit test)
+            // blok bisa selesai SEBELUM `activeJob = job` di luar terlaksana —
+            // tanpa ini guard `finally` gagal me-reset busy.
+            activeJob = coroutineContext[Job]
             try {
                 block()
             } finally {
@@ -112,12 +134,25 @@ class DriveBackupController(
 
     // ===== Backup =====
 
-    /** Backup penuh dengan feedback UI (dipicu dari menu Pengaturan). */
+    /**
+     * Backup penuh dengan feedback UI (dipicu dari menu Pengaturan).
+     * Enkripsi aktif → minta passphrase dulu; passphrase dipakai mengenkripsi
+     * isi backup sebelum upload dan TIDAK pernah disimpan.
+     */
     fun startBackup() {
+        if (getEncryptionEnabled()) {
+            _passphrasePrompt.value = PassphrasePrompt.Backup
+            return
+        }
+        runBackup(encryptedPassphrase = null)
+    }
+
+    private fun runBackup(encryptedPassphrase: String?) {
         launchOperation {
             _busy.value = true
-            val token = driveToken { startBackup() } ?: return@launchOperation
-            val json = buildBackupJson()
+            val token = driveToken { runBackup(encryptedPassphrase) } ?: return@launchOperation
+            val plain = buildBackupJson()
+            val json = encryptedPassphrase?.let { BackupCrypto.encryptToEnvelope(plain, it) } ?: plain
             val fileName = "Nyachat-backup-${timestampForFile()}.json"
             val uploadResult = driveApi.uploadBackup(context, token, fileName, json)
             when (uploadResult) {
@@ -137,6 +172,9 @@ class DriveBackupController(
      * pernah menyetujui akses Drive, operasi dilewati. Return true kalau berhasil.
      */
     suspend fun silentBackup(): Boolean {
+        // Backup terenkripsi butuh passphrase interaktif — auto-backup tidak
+        // pernah menyimpan passphrase, jadi dilewati saat enkripsi aktif.
+        if (getEncryptionEnabled()) return false
         val email = currentEmail() ?: return false
         return when (val tokenResult = driveApi.getAccessToken(context, email)) {
             is BackupResult.Success -> {
@@ -186,27 +224,64 @@ class DriveBackupController(
             _busy.value = true
             val token = driveToken { confirmRestore(file) } ?: return@launchOperation
             val downloadResult = driveApi.downloadBackup(context, token, file.fileId)
-            when (downloadResult) {
-                is BackupResult.Success -> {
-                    val data = parseRestore(downloadResult.value)
-                    if (data == null) {
-                        _message.value = context.getString(R.string.restore_failed_parse)
-                    } else if (data.familyId != null && data.familyId != getWorkspacePin()) {
-                        // Backup milik workspace lain → konfirmasi eksplisit dulu
-                        // (restore akan menimpa lokal + push ke workspace ini).
-                        _crossFamilyRestore.value = data
-                    } else {
-                        doRestore(data)
-                    }
-                }
-                else -> _message.value = context.getString(R.string.restore_failed)
-            }
-            // Tutup dialog pemilih & konfirmasi file — kalau ternyata backup
-            // lintas-workspace, dialog konfirmasi baru (crossFamilyRestore)
-            // yang muncul; tanpa ini dua dialog bertumpuk & bisa berulang.
+            // Tutup dialog pemilih & konfirmasi file — file sudah terunduh;
+            // alur lanjut di handleDownloadedBackup (termasuk prompt passphrase
+            // bila backup terenkripsi, atau konfirmasi lintas-workspace).
             _backups.value = null
             _restoreTarget.value = null
+            when (downloadResult) {
+                is BackupResult.Success -> handleDownloadedBackup(downloadResult.value, null)
+                else -> _message.value = context.getString(R.string.restore_failed)
+            }
         }
+    }
+
+    /**
+     * Proses isi backup yang sudah terunduh. Backup terenkripsi tanpa
+     * [passphrase] → munculkan prompt passphrase; passphrase salah → pesan error.
+     */
+    private suspend fun handleDownloadedBackup(payload: String, passphrase: String?) {
+        if (passphrase == null && BackupCrypto.isEncryptedEnvelope(payload)) {
+            _passphrasePrompt.value = PassphrasePrompt.Restore(payload)
+            return
+        }
+        val data = parseRestore(payload, passphrase)
+        when {
+            data == null -> {
+                _message.value = context.getString(
+                    if (passphrase != null) R.string.restore_wrong_passphrase
+                    else R.string.restore_failed_parse
+                )
+            }
+            data.familyId != null && data.familyId != getWorkspacePin() -> {
+                // Backup milik workspace lain → konfirmasi eksplisit dulu
+                // (restore akan menimpa lokal + push ke workspace ini).
+                _crossFamilyRestore.value = data
+            }
+            else -> doRestore(data)
+        }
+    }
+
+    /**
+     * Passphrase dari dialog: lanjutkan backup terenkripsi atau buka backup
+     * terenkripsi yang sedang di-restore.
+     */
+    fun submitPassphrase(value: String) {
+        val prompt = _passphrasePrompt.value ?: return
+        _passphrasePrompt.value = null
+        when (prompt) {
+            is PassphrasePrompt.Backup -> runBackup(value)
+            // KDF PBKDF2 + dekripsi CPU-intensif — wajib lewat launchOperation
+            // (Dispatchers.IO) supaya tidak membekukan UI / ANR.
+            is PassphrasePrompt.Restore -> launchOperation {
+                _busy.value = true
+                handleDownloadedBackup(prompt.payload, value)
+            }
+        }
+    }
+
+    fun cancelPassphrase() {
+        _passphrasePrompt.value = null
     }
 
     /** Lanjutkan restore backup lintas-workspace setelah konfirmasi user. */

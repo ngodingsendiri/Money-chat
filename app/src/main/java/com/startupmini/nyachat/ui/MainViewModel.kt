@@ -10,13 +10,17 @@ import androidx.lifecycle.viewModelScope
 import com.startupmini.nyachat.BuildConfig
 import com.startupmini.nyachat.data.backup.BackupData
 import com.startupmini.nyachat.data.backup.DataExporter
+import com.startupmini.nyachat.data.analytics.WeeklyInsights
 import com.startupmini.nyachat.data.local.AppDatabase
 import com.startupmini.nyachat.data.local.ChatMessage
 import com.startupmini.nyachat.data.local.FinancialTransaction
 import com.startupmini.nyachat.data.repository.FinanceRepository
 import com.startupmini.nyachat.data.remote.FinanceAiService
 import com.startupmini.nyachat.data.remote.ImageFileUtil
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +32,12 @@ import kotlinx.coroutines.launch
 
 @kotlinx.coroutines.FlowPreview
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    /**
+     * Event one-shot: transaksi baru berhasil dicatat (manual atau hasil parse chat).
+     * UI menampilkan Snackbar "Tercatat" dengan aksi Urungkan (hapus transaksi).
+     */
+    data class TransactionRecorded(val transaction: FinancialTransaction)
 
     companion object {
         /** Cooldown saran cepat — batasi panggilan AI agar tidak boros kuota BYOK (P2-8). */
@@ -64,8 +74,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val totalIncome: StateFlow<Double>
     val totalExpense: StateFlow<Double>
 
+    /** Sprint-4: insight otomatis (tanpa AI) untuk kartu di layar Rekap. */
+    val weeklyInsights: StateFlow<List<String>>
+
     private val _quickSuggestions = MutableStateFlow<List<String>>(emptyList())
     val quickSuggestions: StateFlow<List<String>> = _quickSuggestions.asStateFlow()
+
+    private val _transactionRecorded = MutableSharedFlow<TransactionRecorded>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val transactionRecorded: SharedFlow<TransactionRecorded> = _transactionRecorded
 
     init {
         val db = AppDatabase.getDatabase(application)
@@ -94,6 +113,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         totalExpense = transactions.map { list ->
             list.filter { it.type == Constants.TransactionTypes.EXPENSE }.sumOf { it.amount }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0.0)
+
+        // Insight mingguan/bulanan dihitung lokal (murni, tanpa kuota AI) —
+        // otomatis segar setiap kali daftar transaksi berubah.
+        weeklyInsights = transactions
+            .map { WeeklyInsights.generateInsights(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
         // P2-8: saran cepat dihitung maksimal sekali per interval cooldown —
         // memanggil AI (dengan rotasi 6 model) tiap perubahan transaksi, termasuk
@@ -149,12 +174,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (text.isBlank() && imagePath == null && filePath == null) return
         val currentSender = _activeSender.value
         viewModelScope.launch {
+            // Indikator "AI sedang berpikir" aktif SELAMA parsing (termasuk
+            // kaskade AI) — tanpa ini user bisa mengirim pesan bertumpuk tanpa
+            // tahu parse masih berjalan, dan bubble ketik tidak pernah muncul.
+            _isAiThinking.value = true
             try {
-                repository.sendMessage(
+                val created = repository.sendMessage(
                     currentSender, text.trim(), imagePath, filePath, fileName, replyToSender, replyToText
                 )
+                if (created != null) _transactionRecorded.tryEmit(TransactionRecorded(created))
             } catch (e: Exception) {
                 Log.w("MainViewModel", "Operasi gagal", e)
+            } finally {
+                _isAiThinking.value = false
             }
         }
     }
@@ -211,7 +243,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
 
             try {
-                repository.addManualTransaction(trans)
+                val inserted = repository.addManualTransaction(trans)
+                _transactionRecorded.tryEmit(TransactionRecorded(inserted))
             } catch (e: Exception) {
                 Log.w("MainViewModel", "Operasi gagal", e)
             }
@@ -336,9 +369,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun buildBackupJson(familyId: String? = null): String =
         DataExporter.buildBackupJson(transactions.value, messages.value, BuildConfig.VERSION_NAME, familyId)
 
-    /** Parse backup (tanpa mengubah data). null kalau rusak / bukan Nyachat / format baru. */
-    fun parseRestore(json: String): BackupData? =
-        DataExporter.parseBackupJson(json)
+    /** Parse backup (tanpa mengubah data). null kalau rusak / bukan Nyachat / format baru /
+     *  backup terenkripsi tanpa passphrase yang benar. */
+    fun parseRestore(json: String, passphrase: String? = null): BackupData? =
+        DataExporter.parseBackupJson(json, passphrase)
 
     /** Terapkan hasil parse backup ke data lokal + cloud. Return true kalau berhasil. */
     suspend fun restoreParsedBackup(data: BackupData): Boolean =

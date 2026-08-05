@@ -121,6 +121,8 @@ import com.startupmini.nyachat.Constants
 import com.startupmini.nyachat.R
 import com.startupmini.nyachat.data.local.ChatMessage
 import com.startupmini.nyachat.data.remote.ImageFileUtil
+import com.startupmini.nyachat.ui.util.dayLabel
+import com.startupmini.nyachat.ui.util.isSameDay
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -137,10 +139,16 @@ import com.startupmini.nyachat.ui.theme.MoneyTagExpenseBg
 import com.startupmini.nyachat.ui.theme.MoneyTagExpenseDark
 import com.startupmini.nyachat.ui.theme.MoneyTagIncomeBg
 import com.startupmini.nyachat.ui.theme.MoneyTagIncomeDark
+import com.startupmini.nyachat.ui.theme.LocalSemanticColors
 import kotlinx.coroutines.launch
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import android.webkit.MimeTypeMap
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -165,9 +173,11 @@ fun ChatScreen(
     onSendMessage: (String, String?, String?, String?, String?, String?) -> Unit,
     onEditMessage: (Long, String) -> Unit,
     onAskAiClicked: (String) -> Unit,
-    onDeleteMessage: (Long) -> Unit
+    onDeleteMessage: (Long) -> Unit,
+    onOpenTransaction: (ChatMessage) -> Unit = {}
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val semantic = LocalSemanticColors.current
     var inputText by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
     var pendingImagePath by remember { mutableStateOf<String?>(null) }
@@ -193,8 +203,7 @@ fun ChatScreen(
     val askAiTint by animateColorAsState(
         targetValue = when {
             inputText.isBlank() -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            isDark -> AiBlueDark
-            else -> AiBlue
+            else -> semantic.ai
         },
         animationSpec = tween(200),
         label = "askAiTint"
@@ -310,8 +319,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 24.dp)
             ) {
                 if (messages.isEmpty() && !isAiThinking) {
                     item {
@@ -357,7 +365,14 @@ fun ChatScreen(
                             var menuOpen by remember { mutableStateOf(false) }
                             val clipboard = LocalClipboardManager.current
                             val msg = row.message
-                            Box(modifier = Modifier.fillMaxWidth()) {
+                            // Grouping pengirim sama (item 6): jarak rapat antar
+                            // pesan berurutan dari pengirim yang sama; jarak penuh
+                            // hanya di awal grup (header pengirim baru).
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = if (row.showSenderHeader) 10.dp else 2.dp)
+                            ) {
                                 ChatMessageBubble(
                                     message = msg,
                                     currentActiveSender = activeSender,
@@ -365,6 +380,7 @@ fun ChatScreen(
                                     onLongPress = { menuOpen = true },
                                     onReply = { replyTarget = msg },
                                     onOpenFile = { openAttachedFile(context, msg) },
+                                    onOpenTransaction = { onOpenTransaction(msg) },
                                     modifier = Modifier.animateItem()
                                 )
                                 DropdownMenu(
@@ -397,14 +413,19 @@ fun ChatScreen(
                                             menuOpen = false
                                         }
                                     )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.chat_delete)) },
-                                        leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
-                                        onClick = {
-                                            pendingDelete = msg
-                                            menuOpen = false
-                                        }
-                                    )
+                                    if (msg.sender == activeSender || msg.sender == Constants.Sender.AI) {
+                                        // Konsisten dengan izin edit: hanya pesan milik sendiri
+                                        // (dan bubble AI bersama) yang boleh dihapus — pesan
+                                        // anggota lain tidak bisa dihapus dari perangkat ini.
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.chat_delete)) },
+                                            leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
+                                            onClick = {
+                                                pendingDelete = msg
+                                                menuOpen = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -413,7 +434,11 @@ fun ChatScreen(
 
                 if (isAiThinking) {
                     item {
-                        AiThinkingBubble(modifier = Modifier.animateItem())
+                        AiThinkingBubble(
+                            modifier = Modifier
+                                .animateItem()
+                                .padding(top = 10.dp)
+                        )
                     }
                 }
             }
@@ -498,7 +523,7 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.Rounded.PictureAsPdf,
                             contentDescription = null,
-                            tint = ExpenseRed,
+                            tint = semantic.expense,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -681,7 +706,10 @@ fun ChatScreen(
                 ModalBottomSheet(
                     onDismissRequest = { showAttachmentSheet = false },
                     sheetState = attachmentSheetState,
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    // Sheet berada di area konten (di atas NavigationBar) — padding
+                    // navbar bawaan sheet dinolkan agar tidak muncul celah.
+                    contentWindowInsets = { WindowInsets(0) },
                 ) {
                     Column(
                         modifier = Modifier
@@ -764,7 +792,7 @@ fun ChatScreen(
                                     Icon(
                                         Icons.Rounded.PictureAsPdf,
                                         contentDescription = null,
-                                        tint = ExpenseRed,
+                                        tint = semantic.expense,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
@@ -885,8 +913,13 @@ private fun openAttachedFile(context: Context, message: ChatMessage) {
     if (!file.exists()) return
     runCatching {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        // MIME ditebak dari ekstensi (bukan hardcode PDF) — lampiran non-PDF
+        // (doc, xls, gambar) tetap bisa dibuka aplikasi yang sesuai.
+        val mime = MimeTypeMap.getSingleton()
+            .getMimeTypeFromExtension(file.extension.lowercase(Locale.ROOT))
+            ?: "application/octet-stream"
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/pdf")
+            setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(intent)
@@ -926,11 +959,13 @@ fun ChatMessageBubble(
     onLongPress: (() -> Unit)? = null,
     onReply: (() -> Unit)? = null,
     onOpenFile: (() -> Unit)? = null,
+    onOpenTransaction: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isAi = message.sender == Constants.Sender.AI
     val isMe = message.sender == currentActiveSender
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val semantic = LocalSemanticColors.current
 
     val alignment = when {
         isAi -> Alignment.Start
@@ -940,7 +975,7 @@ fun ChatMessageBubble(
 
     // Warna bubble lebih lembut & konsisten dengan tema (container tones)
     val bubbleColor = when {
-        isAi -> if (isDark) MaterialTheme.colorScheme.surfaceVariant else AiBlueLight
+        isAi -> if (semantic.isDark) MaterialTheme.colorScheme.surfaceVariant else semantic.aiBg
         isMe -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
@@ -966,7 +1001,7 @@ fun ChatMessageBubble(
 
     val senderColor = when {
         isMe -> MaterialTheme.colorScheme.primary
-        isAi -> if (isDark) AiBlueDark else AiBlue
+        isAi -> semantic.ai
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -1138,7 +1173,7 @@ fun ChatMessageBubble(
                             Icon(
                                 imageVector = Icons.Rounded.PictureAsPdf,
                                 contentDescription = null,
-                                tint = if (isMe) Color.White else ExpenseRed,
+                                tint = if (isMe) Color.White else semantic.expense,
                                 modifier = Modifier.size(22.dp)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
@@ -1188,7 +1223,7 @@ fun ChatMessageBubble(
                 if (isMe) {
                     Text(
                         text = timeDisplay,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = timeColor,
                         modifier = Modifier
                             .align(Alignment.End)
@@ -1200,21 +1235,33 @@ fun ChatMessageBubble(
                 if (message.isFinancial && message.detectedAmount != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     val isIncome = message.detectedType == Constants.TransactionTypes.INCOME
-                    // Gunakan warna pastel khusus untuk tag (tidak mencolok)
-                    val tagBg = if (isIncome) {
-                        if (isDark) MoneyTagIncomeDark else MoneyTagIncomeBg
-                    } else {
-                        if (isDark) MoneyTagExpenseDark else MoneyTagExpenseBg
-                    }
-                    val tagColor = if (isIncome) IncomeGreen else ExpenseRed
+                    // Token semantik sudah mode-aware: di dark mode teks memakai
+                    // varian terang (audit P0: sebelumnya teks hijau gelap di atas
+                    // latar hijau gelap ≈1.5:1 — gagal WCAG berat).
+                    val tagBg = if (isIncome) semantic.moneyTagIncomeBg else semantic.moneyTagExpenseBg
+                    val tagColor = if (isIncome) semantic.income else semantic.expense
 
                     val formatRp = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
                         maximumFractionDigits = 0
                     }.format(message.detectedAmount)
 
+                    // Badge bisa di-tap untuk membuka transaksi di Rekap (item 5)
+                    // — inner clickable menang atas combinedClickable bubble.
+                    // Label aksesibilitas di-hoist: semantics {} bukan context composable.
+                    val badgeDesc = stringResource(R.string.chat_open_transaction_desc)
+                    val badgeClickModifier = if (onOpenTransaction != null) {
+                        Modifier
+                            .clickable(onClick = onOpenTransaction)
+                            .semantics {
+                                contentDescription = badgeDesc
+                                role = androidx.compose.ui.semantics.Role.Button
+                            }
+                    } else Modifier
+
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = tagBg,
+                        modifier = badgeClickModifier.testTag("financial_badge_${message.id}")
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
@@ -1243,10 +1290,10 @@ fun ChatMessageBubble(
 
 @Composable
 fun AiThinkingBubble(modifier: Modifier = Modifier) {
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val semantic = LocalSemanticColors.current
     // Teks/spinner AI di atas tint AiBlueLight pakai AiBlueText (lebih gelap) —
     // #0066FF di atas #E3ECFF hanya ~3.4:1, di bawah AA untuk teks kecil.
-    val aiColor = if (isDark) AiBlueDark else AiBlueText
+    val aiColor = semantic.aiText
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -1255,7 +1302,7 @@ fun AiThinkingBubble(modifier: Modifier = Modifier) {
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = if (isDark) MaterialTheme.colorScheme.surfaceVariant else AiBlueLight,
+            color = if (semantic.isDark) MaterialTheme.colorScheme.surfaceVariant else semantic.aiBg,
             border = androidx.compose.foundation.BorderStroke(1.dp, aiColor.copy(alpha = 0.3f))
         ) {
             Row(
@@ -1340,26 +1387,4 @@ private fun buildChatRows(
         rows.add(ChatRow.MessageRow(msg, prev?.sender != msg.sender))
     }
     return rows
-}
-
-private fun isSameDay(a: Long, b: Long): Boolean {
-    val ca = Calendar.getInstance().apply { timeInMillis = a }
-    val cb = Calendar.getInstance().apply { timeInMillis = b }
-    return ca.get(Calendar.YEAR) == cb.get(Calendar.YEAR) &&
-        ca.get(Calendar.DAY_OF_YEAR) == cb.get(Calendar.DAY_OF_YEAR)
-}
-
-private fun dayLabel(timestamp: Long, todayLabel: String, yesterdayLabel: String): String {
-    val today = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    val msgDay = Calendar.getInstance().apply {
-        timeInMillis = timestamp
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-    }
-    return when (msgDay.timeInMillis) {
-        today.timeInMillis -> todayLabel
-        today.timeInMillis - 86_400_000L -> yesterdayLabel
-        else -> SimpleDateFormat("EEEE, dd MMM yyyy", Locale.forLanguageTag("id-ID")).format(Date(timestamp))
-    }
 }

@@ -57,6 +57,7 @@ class PendingOpSerializationTest {
             description = "gaji bulanan",
             loggedBy = "Istri",
             timestamp = 1700086400000L,
+            editedAt = 1700086405000L,
             chatMessageId = 42L,
             cloudId = "tx-1"
         )
@@ -71,7 +72,22 @@ class PendingOpSerializationTest {
         assertEquals("gaji bulanan", restored.description)
         assertEquals("Istri", restored.loggedBy)
         assertEquals(1700086400000L, restored.timestamp)
+        assertEquals(1700086405000L, restored.editedAt)
         assertEquals(42L, restored.chatMessageId)
+    }
+
+    @Test
+    fun `transaksi lama tanpa editedAt tetap bisa diparse`() {
+        // Payload pending-op / backup lama tidak punya field editedAt —
+        // harus tetap kompatibel (null).
+        val legacy = JSONObject(
+            "{\"type\":\"PENGELUARAN\",\"category\":\"Lain-lain\",\"amount\":10000," +
+                "\"description\":\"kopi\",\"loggedBy\":\"Suami\",\"timestamp\":1700000000000," +
+                "\"cloudId\":\"tx-lama\"}"
+        )
+        val restored = DataExporter.transactionFromJson(legacy)
+        assertEquals("tx-lama", restored.cloudId)
+        assertEquals(null, restored.editedAt)
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.startupmini.nyachat.data.local.ChatMessage
 import com.startupmini.nyachat.data.local.FinancialTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -44,6 +45,11 @@ object GeminiService {
 
     private const val MODEL_NAME = "gemini-3.5-flash"
 
+    /** Batas waktu KESELURUHAN kaskade AI (rotasi OpenRouter + Gemini). Tanpa
+     *  ini, rotasi 6 model × timeout baca OkHttp bisa membuat pesan menggantung
+     *  beberapa menit (B6). Habis waktu → langsung fallback heuristik offline. */
+    internal const val AI_CALL_TIMEOUT_MS = 60_000L
+
     suspend fun parseChatMessage(
         messageText: String,
         sender: String,
@@ -57,36 +63,40 @@ object GeminiService {
             buildParsePrompt(messageText, sender)
         }
 
-        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.activeApiKey() != null) {
-            try {
-                val text = OpenRouterService.completeChat(prompt, imagePath)
-                if (text != null) {
-                    val parsed = parseJsonResponse(wrapOpenAiText(text), messageText, sender)
-                    if (parsed != null) return@withContext parsed
+        // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, fallback offline.
+        val aiParsed = withTimeoutOrNull(AI_CALL_TIMEOUT_MS) {
+            // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+            if (OpenRouterService.activeApiKey() != null) {
+                try {
+                    val text = OpenRouterService.completeChat(prompt, imagePath)
+                    if (text != null) {
+                        val parsed = parseJsonResponse(wrapOpenAiText(text), messageText, sender)
+                        if (parsed != null) return@withTimeoutOrNull parsed
+                    }
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
-        }
 
-        // 2) Gemini API (BYOK atau key bawaan app)
-        val apiKey = getApiKey()
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val jsonResponse = callGeminiApi(prompt, apiKey, imagePath)
-                val parsed = parseJsonResponse(jsonResponse, messageText, sender)
-                if (parsed != null) {
-                    return@withContext parsed
+            // 2) Gemini API (BYOK atau key bawaan app)
+            val apiKey = getApiKey()
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                try {
+                    val jsonResponse = callGeminiApi(prompt, apiKey, imagePath)
+                    val parsed = parseJsonResponse(jsonResponse, messageText, sender)
+                    if (parsed != null) {
+                        return@withTimeoutOrNull parsed
+                    }
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
+            null
         }
 
         // 3) Fallback: teks biasa pakai mesin offline; foto nota tanpa AI hanya tersimpan
-        //    (tidak bisa dibaca tanpa kunci AI vision).
-        return@withContext offlineHeuristicParse(messageText, sender)
+        //    (tidak bisa dibaca tanpa kunci AI vision). Juga dipakai saat habis waktu.
+        return@withContext aiParsed ?: offlineHeuristicParse(messageText, sender)
     }
 
 
@@ -119,42 +129,48 @@ object GeminiService {
             Jangan tambahkan penjelasan apa pun di luar JSON Array.
         """.trimIndent()
 
-        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.activeApiKey() != null) {
-            try {
-                val text = OpenRouterService.completeChat(prompt)
-                if (!text.isNullOrBlank()) {
-                    val cleanedText = text.replace("```json", "").replace("```", "").trim()
-                    val jsonArray = JSONArray(cleanedText)
-                    val suggestions = mutableListOf<String>()
-                    for (i in 0 until jsonArray.length()) {
-                        suggestions.add(jsonArray.getString(i))
+        // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, langsung
+        // fallback offline supaya UI saran cepat tidak menggantung.
+        val aiSuggestions = withTimeoutOrNull(AI_CALL_TIMEOUT_MS) {
+            // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+            if (OpenRouterService.activeApiKey() != null) {
+                try {
+                    val text = OpenRouterService.completeChat(prompt)
+                    if (!text.isNullOrBlank()) {
+                        val cleanedText = text.replace("```json", "").replace("```", "").trim()
+                        val jsonArray = JSONArray(cleanedText)
+                        val suggestions = mutableListOf<String>()
+                        for (i in 0 until jsonArray.length()) {
+                            suggestions.add(jsonArray.getString(i))
+                        }
+                        if (suggestions.isNotEmpty()) return@withTimeoutOrNull suggestions
                     }
-                    if (suggestions.isNotEmpty()) return@withContext suggestions
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
-        }
 
-        // 2) Gemini API
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val jsonResponse = callGeminiApi(prompt, apiKey)
-                val text = extractTextFromGeminiResponse(jsonResponse)
-                if (!text.isNullOrBlank()) {
-                    val cleanedText = text.replace("```json", "").replace("```", "").trim()
-                    val jsonArray = JSONArray(cleanedText)
-                    val suggestions = mutableListOf<String>()
-                    for (i in 0 until jsonArray.length()) {
-                        suggestions.add(jsonArray.getString(i))
+            // 2) Gemini API
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                try {
+                    val jsonResponse = callGeminiApi(prompt, apiKey)
+                    val text = extractTextFromGeminiResponse(jsonResponse)
+                    if (!text.isNullOrBlank()) {
+                        val cleanedText = text.replace("```json", "").replace("```", "").trim()
+                        val jsonArray = JSONArray(cleanedText)
+                        val suggestions = mutableListOf<String>()
+                        for (i in 0 until jsonArray.length()) {
+                            suggestions.add(jsonArray.getString(i))
+                        }
+                        if (suggestions.isNotEmpty()) return@withTimeoutOrNull suggestions
                     }
-                    if (suggestions.isNotEmpty()) return@withContext suggestions
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
+            null
         }
+        if (aiSuggestions != null) return@withContext aiSuggestions
 
         // 3) Fallback offline heuristic
         val fallback = transactions.take(4).map { "${it.description} ${it.amount.toLong()}" }
@@ -197,30 +213,36 @@ object GeminiService {
             Gunakan nada bicara yang profesional, jelas, dan mengedukasi.
         """.trimIndent()
 
-        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.activeApiKey() != null) {
-            try {
-                val text = OpenRouterService.completeChat(prompt)
-                if (!text.isNullOrBlank()) {
-                    return@withContext text
+        // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, langsung
+        // laporan offline supaya dialog AI tidak freeze.
+        val aiReport = withTimeoutOrNull(AI_CALL_TIMEOUT_MS) {
+            // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+            if (OpenRouterService.activeApiKey() != null) {
+                try {
+                    val text = OpenRouterService.completeChat(prompt)
+                    if (!text.isNullOrBlank()) {
+                        return@withTimeoutOrNull text
+                    }
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
-        }
 
-        // 2) Gemini API
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val jsonResponse = callGeminiApi(prompt, apiKey)
-                val text = extractTextFromGeminiResponse(jsonResponse)
-                if (!text.isNullOrBlank()) {
-                    return@withContext text
+            // 2) Gemini API
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                try {
+                    val jsonResponse = callGeminiApi(prompt, apiKey)
+                    val text = extractTextFromGeminiResponse(jsonResponse)
+                    if (!text.isNullOrBlank()) {
+                        return@withTimeoutOrNull text
+                    }
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
                 }
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
             }
+            null
         }
+        if (aiReport != null) return@withContext aiReport
 
         // 3) Offline Fallback Report
         return@withContext """
@@ -268,28 +290,34 @@ object GeminiService {
             Gunakan markdown sederhana dengan emoji, tetap profesional dan tidak bertele-tele.
         """.trimIndent()
 
-        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.activeApiKey() != null) {
-            try {
-                val text = OpenRouterService.completeChat(prompt)
-                if (!text.isNullOrBlank()) return@withContext text
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+        // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, langsung
+        // laporan offline supaya dialog analisis bulanan tidak freeze.
+        val aiReport = withTimeoutOrNull(AI_CALL_TIMEOUT_MS) {
+            // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+            if (OpenRouterService.activeApiKey() != null) {
+                try {
+                    val text = OpenRouterService.completeChat(prompt)
+                    if (!text.isNullOrBlank()) return@withTimeoutOrNull text
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                }
             }
-        }
 
-        // 2) Gemini API
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val jsonResponse = callGeminiApi(prompt, apiKey)
-                val text = extractTextFromGeminiResponse(jsonResponse)
-                if (!text.isNullOrBlank()) return@withContext text
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+            // 2) Gemini API
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                try {
+                    val jsonResponse = callGeminiApi(prompt, apiKey)
+                    val text = extractTextFromGeminiResponse(jsonResponse)
+                    if (!text.isNullOrBlank()) return@withTimeoutOrNull text
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                }
             }
+            null
         }
+        if (aiReport != null) return@withContext aiReport
 
-        // 3) Laporan offline (tanpa internet / tanpa key) — tetap informatif.
+        // 3) Laporan offline (tanpa internet / tanpa key / habis waktu) — tetap informatif.
         return@withContext buildOfflineMonthlyReport(monthly, transactions)
     }
 
@@ -337,30 +365,34 @@ object GeminiService {
             Pertanyaan: $prompt
         """.trimIndent()
 
-        // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
-        if (OpenRouterService.activeApiKey() != null) {
-            try {
-                val text = OpenRouterService.completeChat(chatPrompt)
-                if (!text.isNullOrBlank()) return@withContext text
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+        // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, balasan offline.
+        val aiReply = withTimeoutOrNull(AI_CALL_TIMEOUT_MS) {
+            // 1) OpenRouter (BYOK) — model gratis dengan rotasi otomatis
+            if (OpenRouterService.activeApiKey() != null) {
+                try {
+                    val text = OpenRouterService.completeChat(chatPrompt)
+                    if (!text.isNullOrBlank()) return@withTimeoutOrNull text
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                }
             }
+
+            // 2) Gemini API (BYOK atau key bawaan app)
+            val apiKey = getApiKey()
+            if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+                try {
+                    val jsonResponse = callGeminiApi(chatPrompt, apiKey)
+                    val text = extractTextFromGeminiResponse(jsonResponse)
+                    if (!text.isNullOrBlank()) return@withTimeoutOrNull text
+                } catch (e: Exception) {
+                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                }
+            }
+            null
         }
 
-        // 2) Gemini API (BYOK atau key bawaan app)
-        val apiKey = getApiKey()
-        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
-            try {
-                val jsonResponse = callGeminiApi(chatPrompt, apiKey)
-                val text = extractTextFromGeminiResponse(jsonResponse)
-                if (!text.isNullOrBlank()) return@withContext text
-            } catch (e: Exception) {
-                Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
-            }
-        }
-
-        // 3) Balasan offline (tanpa internet / tanpa key)
-        return@withContext offlineChatReply(prompt)
+        // 3) Balasan offline (tanpa internet / tanpa key / habis waktu)
+        return@withContext aiReply ?: offlineChatReply(prompt)
     }
 
     private fun offlineChatReply(prompt: String): String {
@@ -544,27 +576,47 @@ object GeminiService {
         }
     }
 
+    /** Pola angka + satuan opsional: "50rb", "50.000", "2,5jt", "5 juta", "10k".
+     *  `(?![a-z])` mencegah huruf biasa terbaca sebagai satuan — mis. 'k' pada
+     *  "2 kopi" bukan satuan ribu. */
+    private val NUMBER_UNIT_PATTERN =
+        Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:(rb|ribu|k|jt|juta)(?![a-z]))?")
+
+    /**
+     * Ekstrak nominal Rupiah dari teks bebas. Angka BERSATUAN (rb/ribu/k/jt/juta)
+     * diprioritaskan atas angka polos karena jauh lebih mungkin nominal transaksi:
+     * "beli 2 kopi 20rb" mengambil 20rb (Rp 20.000), bukan 2 (Rp 2.000).
+     * Tanpa angka bersatuan, fallback ke angka pertama; angka polos kecil
+     * (1–999) dianggap ribuan sesuai kebiasaan chat Indonesia.
+     */
+    internal fun extractAmountFromText(textLower: String): Double? {
+        val matcher = NUMBER_UNIT_PATTERN.matcher(textLower)
+        var fallbackNum: String? = null
+        while (matcher.find()) {
+            val numStr = matcher.group(1) ?: continue
+            val unit = matcher.group(2)
+            if (!unit.isNullOrEmpty()) return toRupiah(numStr, unit)
+            if (fallbackNum == null) fallbackNum = numStr
+        }
+        val num = fallbackNum ?: return null
+        return toRupiah(num, null)
+    }
+
+    private fun toRupiah(numStr: String, unit: String?): Double? {
+        val rawNum = numStr.replace(",", ".").toDoubleOrNull() ?: return null
+        return when (unit) {
+            "rb", "ribu", "k" -> rawNum * 1000
+            "jt", "juta" -> rawNum * 1000000
+            else -> if (rawNum in 1.0..999.0) rawNum * 1000 else rawNum
+        }
+    }
+
     internal fun offlineHeuristicParse(messageText: String, sender: String): AiChatParseResult {
         val textLower = messageText.lowercase()
 
-        // Amount detection regex patterns: e.g. "50rb", "50.000", "50000", "50k", "5 juta", "2,5jt"
-        var amount: Double? = null
-        val numberPattern = Pattern.compile("(\\d+([.,]\\d+)?)\\s*(rb|ribu|k|jt|juta)?")
-        val matcher = numberPattern.matcher(textLower)
-        
-        if (matcher.find()) {
-            val numStr = matcher.group(1)?.replace(",", ".") ?: "0"
-            val rawNum = numStr.toDoubleOrNull() ?: 0.0
-            val unit = matcher.group(3) ?: ""
-            
-            amount = when (unit) {
-                "rb", "ribu", "k" -> rawNum * 1000
-                "jt", "juta" -> rawNum * 1000000
-                else -> {
-                    if (rawNum in 1.0..999.0) rawNum * 1000 else rawNum
-                }
-            }
-        }
+        // Amount detection: angka bersatuan (rb/jt/k) dimenangkan atas angka polos
+        // pertama — lihat extractAmountFromText.
+        val amount = extractAmountFromText(textLower)
 
         val isIncome = textLower.contains("gaji") || textLower.contains("pemasukan") ||
                 textLower.contains("transfer masuk") || textLower.contains("dapat bonus") ||

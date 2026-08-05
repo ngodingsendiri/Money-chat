@@ -1,14 +1,20 @@
 package com.startupmini.nyachat.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -17,6 +23,7 @@ import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.EnhancedEncryption
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Pin
@@ -24,38 +31,54 @@ import androidx.compose.material.icons.rounded.Route
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.TableChart
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.startupmini.nyachat.BuildConfig
+import com.startupmini.nyachat.Constants
 import com.startupmini.nyachat.R
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Bottom sheet Pengaturan — di-ekstrak dari MainActivity (P2-13) supaya
  * MainActivity tidak terus membengkak dan tiap aksi bisa diuji berdiri sendiri.
  * Semua aksi (ubah tema, cek update, kelola API key, backup/restore, logout)
  * didelegasikan lewat callback; komponen ini murni tampilan + pemicu aksi.
+ *
+ * Tata letak (item 7-9): kartu identitas workspace di atas, lalu seksi
+ * UMUM / AI & API / DATA & BACKUP / ZONA BERBAHAYA dengan baris aksi khusus
+ * (bukan DropdownMenuItem) + status backup terakhir.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsSheet(
     isDarkMode: Boolean,
     userName: String?,
+    workspaceRole: String?,
+    workspacePin: String?,
     backupBusy: Boolean,
+    isBackupEncrypted: Boolean,
+    lastBackupMillis: Long,
     onDismiss: () -> Unit,
     onToggleDarkMode: () -> Unit,
+    onToggleBackupEncryption: () -> Unit,
     onCheckUpdate: () -> Unit,
     onGeminiKey: () -> Unit,
     onOpenRouterKey: () -> Unit,
@@ -72,6 +95,9 @@ fun SettingsSheet(
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = MaterialTheme.colorScheme.surface,
+        // Sheet berada di area konten (di atas NavigationBar) — padding navbar
+        // bawaan sheet dinolkan agar tidak muncul celah.
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         Column(
             modifier = Modifier
@@ -106,89 +132,250 @@ fun SettingsSheet(
                 )
             }
 
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            // Kartu identitas workspace (item 8): siapa yang login di workspace ini.
+            IdentityCard(userName = userName, workspaceRole = workspaceRole, workspacePin = workspacePin)
 
             // ── UMUM ──
             SectionLabel(stringResource(R.string.settings_section_general))
-            DropdownMenuItem(
-                text = { Text(stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark)) },
-                onClick = onToggleDarkMode,
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (isDarkMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                        contentDescription = null
-                    )
-                }
+            SettingRow(
+                icon = if (isDarkMode) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                title = stringResource(if (isDarkMode) R.string.menu_mode_light else R.string.menu_mode_dark),
+                onClick = onToggleDarkMode
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_check_update)) },
-                onClick = onCheckUpdate,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.SystemUpdate, contentDescription = null) }
+            SettingRow(
+                icon = Icons.Rounded.SystemUpdate,
+                title = stringResource(R.string.menu_check_update),
+                onClick = onCheckUpdate
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
             // ── AI & API ──
             SectionLabel(stringResource(R.string.settings_section_ai))
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_gemini_key)) },
-                onClick = onGeminiKey,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.Key, contentDescription = null) }
+            SettingRow(
+                icon = Icons.Rounded.Key,
+                title = stringResource(R.string.menu_gemini_key),
+                onClick = onGeminiKey
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_openrouter_key)) },
-                onClick = onOpenRouterKey,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.Route, contentDescription = null) }
+            SettingRow(
+                icon = Icons.Rounded.Route,
+                title = stringResource(R.string.menu_openrouter_key),
+                onClick = onOpenRouterKey
             )
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
-            // ── AKUN ──
-            SectionLabel(stringResource(R.string.settings_section_account))
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_pin)) },
-                onClick = onPin,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.Pin, contentDescription = null) }
+            // ── DATA & BACKUP ──
+            SectionLabel(stringResource(R.string.settings_section_data))
+            SettingRow(
+                icon = Icons.Rounded.Pin,
+                title = stringResource(R.string.menu_pin),
+                subtitle = workspacePin?.let { maskPin(it) },
+                onClick = onPin
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_export_csv)) },
-                onClick = onExportCsv,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.TableChart, contentDescription = null) }
+            SettingRow(
+                icon = Icons.Rounded.TableChart,
+                title = stringResource(R.string.menu_export_csv),
+                onClick = onExportCsv
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_backup_drive)) },
-                onClick = onBackup,
+            SettingRow(
+                icon = Icons.Rounded.CloudUpload,
+                title = stringResource(R.string.menu_backup_drive),
                 enabled = !backupBusy,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.CloudUpload, contentDescription = null) }
+                onClick = onBackup
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_restore_drive)) },
-                onClick = onRestore,
+            SettingRow(
+                icon = Icons.Rounded.CloudDownload,
+                title = stringResource(R.string.menu_restore_drive),
                 enabled = !backupBusy,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.CloudDownload, contentDescription = null) }
+                onClick = onRestore
             )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.menu_clear_data)) },
-                onClick = onClearData,
-                leadingIcon = { Icon(imageVector = Icons.Rounded.Delete, contentDescription = null) }
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(R.string.menu_logout, userName ?: "User"),
-                        color = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = onLogout,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ExitToApp,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
+            // Enkripsi backup (Sprint-2): passphrase diminta saat backup/restore,
+            // tidak pernah disimpan. Auto-backup harian dijeda saat aktif.
+            SettingRow(
+                icon = Icons.Rounded.EnhancedEncryption,
+                title = stringResource(R.string.settings_backup_encrypt),
+                subtitle = stringResource(R.string.settings_backup_encrypt_desc),
+                onClick = onToggleBackupEncryption,
+                trailing = {
+                    Switch(checked = isBackupEncrypted, onCheckedChange = { onToggleBackupEncryption() })
                 }
             )
+            // Status backup terakhir (item 9) — informatif, bukan aksi.
+            SettingRow(
+                icon = Icons.Rounded.CloudUpload,
+                title = stringResource(R.string.settings_last_backup_title),
+                subtitle = lastBackupSubtitle(lastBackupMillis, isBackupEncrypted),
+                onClick = null
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+
+            // ── ZONA BERBAHAYA ──
+            DangerSectionLabel()
+            SettingRow(
+                icon = Icons.Rounded.Delete,
+                title = stringResource(R.string.menu_clear_data),
+                tint = MaterialTheme.colorScheme.error,
+                onClick = onClearData
+            )
+            SettingRow(
+                icon = Icons.AutoMirrored.Rounded.ExitToApp,
+                title = stringResource(R.string.menu_logout, userName ?: "User"),
+                tint = MaterialTheme.colorScheme.error,
+                onClick = onLogout
+            )
             Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+/** Label "Backup terakhir: …" + status enkripsi untuk baris status (item 9). */
+@Composable
+private fun lastBackupSubtitle(lastBackupMillis: Long, isBackupEncrypted: Boolean): String {
+    val whenLabel = if (lastBackupMillis > 0) {
+        val date = Date(lastBackupMillis)
+        val dateFmt = SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("id-ID"))
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.forLanguageTag("id-ID"))
+        stringResource(R.string.settings_last_backup_time, dateFmt.format(date), timeFmt.format(date))
+    } else {
+        stringResource(R.string.settings_last_backup_never)
+    }
+    val encLabel = stringResource(
+        if (isBackupEncrypted) R.string.settings_backup_encrypted_yes
+        else R.string.settings_backup_encrypted_no
+    )
+    return "$whenLabel · $encLabel"
+}
+
+/** PIN workspace disamarkan — hanya 4 digit terakhir yang terlihat. */
+private fun maskPin(pin: String): String =
+    "•".repeat((pin.length - 4).coerceAtLeast(0)) + pin.takeLast(4)
+
+/**
+ * Kartu identitas workspace (item 8): avatar inisial + nama + peran + PIN
+ * tersamar. Memberi konteks "siapa & di workspace mana" sebelum daftar aksi.
+ */
+@Composable
+private fun IdentityCard(userName: String?, workspaceRole: String?, workspacePin: String?) {
+    val displayName = userName ?: stringResource(R.string.pin_default_name)
+    val roleLabel = stringResource(
+        if (workspaceRole == Constants.Roles.OWNER) R.string.pin_role_owner
+        else R.string.pin_role_member
+    )
+    Surface(
+        shape = RoundedCornerShape(Constants.Ui.CORNER_L.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = displayName.take(1).uppercase(Locale.ROOT),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1
+                )
+                Text(
+                    text = roleLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            workspacePin?.let { pin ->
+                Surface(
+                    shape = RoundedCornerShape(Constants.Ui.CORNER_S.dp),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Text(
+                        text = maskPin(pin),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Baris pengaturan khusus (item 7): ikon + judul (+ subjudul opsional) +
+ * elemen trailing opsional (mis. Switch). Tinggi min 48dp (target sentuh).
+ * [onClick] null → baris informatif (tidak bisa di-tap).
+ */
+@Composable
+private fun SettingRow(
+    icon: ImageVector,
+    title: String,
+    onClick: (() -> Unit)?,
+    subtitle: String? = null,
+    tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    enabled: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    val titleColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+        tint != MaterialTheme.colorScheme.onSurfaceVariant -> tint
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(
+                if (onClick != null && enabled) {
+                    Modifier.clickable(onClick = onClick)
+                } else Modifier
+            )
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) tint else tint.copy(alpha = 0.4f),
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = titleColor
+            )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        trailing?.let {
+            Spacer(modifier = Modifier.width(8.dp))
+            it()
         }
     }
 }
@@ -200,6 +387,17 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+private fun DangerSectionLabel() {
+    Text(
+        text = stringResource(R.string.settings_section_danger),
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)
     )
 }

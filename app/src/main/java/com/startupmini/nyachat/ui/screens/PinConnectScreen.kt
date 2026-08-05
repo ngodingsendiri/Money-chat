@@ -47,6 +47,7 @@ import com.startupmini.nyachat.BuildConfig
 import com.startupmini.nyachat.Constants
 import com.startupmini.nyachat.R
 import java.security.MessageDigest
+import java.security.SecureRandom
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -79,6 +80,12 @@ fun PinConnectScreen(
     var signedInEmail by rememberSaveable { mutableStateOf<String?>(null) }
     val clipboard = LocalClipboardManager.current
     var pinCopied by rememberSaveable { mutableStateOf(false) }
+    // Rate limiting percobaan join (anti brute-force PIN): catat waktu tiap
+    // percobaan; setelah batas terlampaui, tombol join dikunci sementara.
+    // remember (bukan rememberSaveable): reset saat rotasi tidak berbahaya —
+    // limiter ini pelengkap, penegak utama ada di persetujuan owner + rules.
+    val pinAttempts = remember { mutableListOf<Long>() }
+    var pinRateError by remember { mutableStateOf<String?>(null) }
 
     val defaultName = stringResource(R.string.pin_default_name)
     val defaultGoogleName = stringResource(R.string.pin_default_google_name)
@@ -398,9 +405,19 @@ fun PinConnectScreen(
 
                                 Button(
                                     onClick = {
-                                        // Terima PIN 6–8 digit: workspace lama boleh 6 digit,
-                                        // workspace baru wajib 8 digit (Constants.Defaults.PIN_LENGTH).
-                                        if (inputPin.length >= Constants.Defaults.PIN_MIN_LEGACY_LENGTH) {
+                                        // Rate limiting dulu — kalau sedang lockout, tolak
+                                        // percobaan dan tampilkan sisa waktu tunggu.
+                                        val now = System.currentTimeMillis()
+                                        if (PinAttemptLimiter.lockoutEndsAt(pinAttempts, now) != null) {
+                                            pinRateError = context.getString(
+                                                R.string.pin_rate_limited,
+                                                PinAttemptLimiter.remainingLockSeconds(pinAttempts, now)
+                                            )
+                                        } else if (inputPin.length >= Constants.Defaults.PIN_MIN_LEGACY_LENGTH) {
+                                            // Terima PIN 6–8 digit: workspace lama boleh 6 digit,
+                                            // workspace baru wajib 8 digit (Constants.Defaults.PIN_LENGTH).
+                                            pinRateError = null
+                                            pinAttempts.add(now)
                                             onPinConnected(inputPin, Constants.Roles.MEMBER, myName.ifBlank { defaultName })
                                         }
                                     },
@@ -410,6 +427,16 @@ fun PinConnectScreen(
                                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                                 ) {
                                     Text(stringResource(R.string.pin_join), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                pinRateError?.let {
+                                    Text(
+                                        text = it,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.error,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(top = 12.dp).fillMaxWidth()
+                                    )
                                 }
 
                                 Text(
@@ -430,11 +457,16 @@ fun PinConnectScreen(
                             else -> {                                        Button(
                                             onClick = {
                                                 // PIN baru 8 digit (ruang kunci 10^8, bukan 10^6) —
-                                                // lihat Constants.Defaults.PIN_LENGTH.
+                                                // lihat Constants.Defaults.PIN_LENGTH. Dipakai
+                                                // SecureRandom: PIN adalah password bersama
+                                                // workspace, jadi tidak boleh berasal dari PRNG
+                                                // biasa (java.util.Random) yang bisa ditebak.
                                                 val len = Constants.Defaults.PIN_LENGTH
-                                                val min = ("1" + "0".repeat(len - 1)).toLong() // 10000000
-                                                val max = ("9".repeat(len)).toLong()           // 99999999
-                                                generatedPin = (min..max).random().toString()
+                                                val random = SecureRandom()
+                                                generatedPin = buildString {
+                                                    append((1 + random.nextInt(9)).toString()) // digit pertama 1–9
+                                                    repeat(len - 1) { append(random.nextInt(10).toString()) }
+                                                }
                                                 pinFlowState = 2
                                             },
                                     modifier = Modifier.fillMaxWidth().height(56.dp),

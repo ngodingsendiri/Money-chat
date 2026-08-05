@@ -3,7 +3,9 @@ package com.startupmini.nyachat.data.backup
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -22,6 +24,7 @@ import org.robolectric.RobolectricTestRunner
  * eksplisit), restore workspace sama (langsung diterapkan), tombol Batal, dan
  * silent backup harian.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class DriveBackupControllerTest {
 
@@ -37,6 +40,7 @@ class DriveBackupControllerTest {
         var pruneCalls = 0
         var lastToken: String? = null
         var lastFileName: String? = null
+        var lastJson: String? = null
         /** true → uploadBackup menggantung sampai coroutine dibatalkan (tes Batal). */
         var hangUpload = false
 
@@ -52,6 +56,7 @@ class DriveBackupControllerTest {
             uploadCalls++
             lastToken = token
             lastFileName = fileName
+            lastJson = json
             if (hangUpload) awaitCancellation()
             return uploadResult
         }
@@ -78,12 +83,16 @@ class DriveBackupControllerTest {
     }
 
     private fun newController(api: FakeDriveApi, scope: kotlinx.coroutines.CoroutineScope): DriveBackupController {
-        val c = DriveBackupController(scope, context, api)
+        // UnconfinedTestDispatcher: operasi controller (yang aslinya berjalan di
+        // Dispatchers.IO) dieksekusi langsung di scheduler test tanpa kabur ke
+        // thread lain — advanceUntilIdle tetap deterministik.
+        val c = DriveBackupController(scope, context, api, UnconfinedTestDispatcher())
         c.currentEmail = { "test@example.com" }
         c.getWorkspacePin = { "11111111" }
         c.buildBackupJson = { """{"app":"Nyachat"}""" }
-        c.parseRestore = { null }
+        c.parseRestore = { _, _ -> null }
         c.restoreParsedBackup = { true }
+        c.getEncryptionEnabled = { false }
         c.onSuccessfulBackup = { }
         return c
     }
@@ -148,7 +157,7 @@ class DriveBackupControllerTest {
         val controller = newController(api, this)
         api.downloadResult = BackupResult.Success("""{"app":"Nyachat","format":1}""")
         var applied = false
-        controller.parseRestore = { BackupData(emptyList(), emptyList(), familyId = "11111111") }
+        controller.parseRestore = { _, _ -> BackupData(emptyList(), emptyList(), familyId = "11111111") }
         controller.restoreParsedBackup = { applied = true; true }
 
         controller.confirmRestore(DriveBackupFile("id1", "backup.json", "2026-01-01"))
@@ -164,7 +173,7 @@ class DriveBackupControllerTest {
         val api = FakeDriveApi()
         val controller = newController(api, this)
         api.downloadResult = BackupResult.Success("""{"app":"Nyachat","format":1}""")
-        controller.parseRestore = { BackupData(emptyList(), emptyList(), familyId = "99999999") }
+        controller.parseRestore = { _, _ -> BackupData(emptyList(), emptyList(), familyId = "99999999") }
 
         controller.confirmRestore(DriveBackupFile("id1", "backup.json", "2026-01-01"))
         advanceUntilIdle()
@@ -222,5 +231,115 @@ class DriveBackupControllerTest {
 
         assertFalse(controller.silentBackup())
         assertEquals(0, api.uploadCalls)
+    }
+
+    // ---- Sprint-2: backup terenkripsi ----
+
+    @Test
+    fun backupTerenkripsiMintaPassphraseDuluLaluUploadAmplop() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        controller.getEncryptionEnabled = { true }
+
+        controller.startBackup()
+        advanceUntilIdle()
+
+        // Belum ada upload — menunggu passphrase.
+        assertTrue(controller.passphrasePrompt.value is DriveBackupController.PassphrasePrompt.Backup)
+        assertEquals(0, api.uploadCalls)
+
+        controller.submitPassphrase("rahasia123")
+        advanceUntilIdle()
+
+        assertEquals(1, api.uploadCalls)
+        // Yang di-upload amplop terenkripsi, BUKAN JSON plaintext.
+        assertTrue(BackupCrypto.isEncryptedEnvelope(api.lastJson!!))
+        assertFalse(api.lastJson!!.contains("\"app\":\"Nyachat\",\"format\""))
+        // Isi amplop bisa dibuka kembali dengan passphrase yang sama.
+        assertEquals(
+            """{"app":"Nyachat"}""",
+            BackupCrypto.decryptEnvelope(api.lastJson!!, "rahasia123")
+        )
+        assertTrue(controller.message.value!!.contains("Backup berhasil"))
+    }
+
+    @Test
+    fun batalPassphraseMembatalkanBackup() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        controller.getEncryptionEnabled = { true }
+
+        controller.startBackup()
+        controller.cancelPassphrase()
+        advanceUntilIdle()
+
+        assertNull(controller.passphrasePrompt.value)
+        assertEquals(0, api.uploadCalls)
+    }
+
+    @Test
+    fun silentBackupDilewatiSaatEnkripsiAktif() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        controller.getEncryptionEnabled = { true }
+
+        // Enkripsi butuh passphrase interaktif — auto-backup tidak menyimpan
+        // passphrase, jadi dilewati (bukan bikin backup tanpa enkripsi).
+        assertFalse(controller.silentBackup())
+        assertEquals(0, api.uploadCalls)
+    }
+
+    @Test
+    fun restoreBackupTerenkripsiMintaPassphraseDanTolakPassphraseSalah() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        val envelope = BackupCrypto.encryptToEnvelope(
+            """{"app":"Nyachat","format":1}""", "benar123", iterations = 1_000
+        )
+        api.downloadResult = BackupResult.Success(envelope)
+        controller.parseRestore = { _, passphrase ->
+            if (passphrase == "benar123") BackupData(emptyList(), emptyList(), familyId = "11111111")
+            else null
+        }
+
+        controller.confirmRestore(DriveBackupFile("id1", "backup.json", "2026-01-01"))
+        advanceUntilIdle()
+
+        // Prompt passphrase muncul, restore belum jalan.
+        assertTrue(controller.passphrasePrompt.value is DriveBackupController.PassphrasePrompt.Restore)
+
+        // Passphrase salah → pesan error, tidak diterapkan.
+        var applied = false
+        controller.restoreParsedBackup = { applied = true; true }
+        controller.submitPassphrase("salah999")
+        advanceUntilIdle()
+        assertFalse(applied)
+        assertTrue(controller.message.value!!.contains("Passphrase salah"))
+    }
+
+    @Test
+    fun restoreBackupTerenkripsiDenganPassphraseBenarDiterapkan() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        val envelope = BackupCrypto.encryptToEnvelope(
+            """{"app":"Nyachat","format":1}""", "benar123", iterations = 1_000
+        )
+        api.downloadResult = BackupResult.Success(envelope)
+        var receivedPassphrase: String? = null
+        controller.parseRestore = { _, passphrase ->
+            receivedPassphrase = passphrase
+            BackupData(emptyList(), emptyList(), familyId = "11111111")
+        }
+        var applied = false
+        controller.restoreParsedBackup = { applied = true; true }
+
+        controller.confirmRestore(DriveBackupFile("id1", "backup.json", "2026-01-01"))
+        advanceUntilIdle()
+        controller.submitPassphrase("benar123")
+        advanceUntilIdle()
+
+        assertEquals("benar123", receivedPassphrase)
+        assertTrue(applied)
+        assertTrue(controller.message.value!!.contains("Backup berhasil dipulihkan"))
     }
 }

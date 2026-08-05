@@ -44,6 +44,10 @@ object MonthlyAnalytics {
             ?.key
     }
 
+    /** Apakah [timestamp] jatuh pada tahun/[month] (bulan 1..12) yang diminta. */
+    fun isSameMonth(timestamp: Long, year: Int, month: Int): Boolean =
+        yearMonth(timestamp) == (year to month)
+
     private fun yearMonth(timestamp: Long): Pair<Int, Int> {
         val cal = Calendar.getInstance().apply { timeInMillis = timestamp }
         return cal.get(Calendar.YEAR) to (cal.get(Calendar.MONTH) + 1)

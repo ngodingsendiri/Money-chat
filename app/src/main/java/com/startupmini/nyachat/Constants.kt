@@ -17,6 +17,7 @@ object Constants {
         const val OPENROUTER_API_KEY = "openrouter_api_key"
         const val LAST_UPDATE_CHECK = "last_update_check"
         const val LAST_AUTO_BACKUP = "last_auto_backup"
+        const val BACKUP_ENCRYPTED = "backup_encrypted"
     }
 
     // ===== Firestore collection names =====
@@ -89,6 +90,18 @@ object Constants {
         const val INCOME = "PEMASUKAN"
         const val EXPENSE = "PENGELUARAN"
         val ALL = listOf(INCOME, EXPENSE)
+    }
+
+    // ===== Skala radius sudut (audit P2.6 — hindari radius ad-hoc) =====
+    object Ui {
+        /** dp, elemen kecil (chip, segmen kontrol, icon container). */
+        const val CORNER_S = 8
+        /** dp, tombol & field. */
+        const val CORNER_M = 12
+        /** dp, kartu standar & FAB. */
+        const val CORNER_L = 16
+        /** dp, kartu banner/hero. */
+        const val CORNER_XL = 24
     }
 
     // ===== Kategori transaksi default (satu-satunya sumber kebenaran literal) =====

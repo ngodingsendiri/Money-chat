@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +26,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -42,7 +45,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -51,20 +53,32 @@ import androidx.compose.ui.unit.dp
 import com.startupmini.nyachat.Constants
 import com.startupmini.nyachat.R
 import com.startupmini.nyachat.data.local.FinancialTransaction
-import com.startupmini.nyachat.ui.theme.ExpenseRed
-import com.startupmini.nyachat.ui.theme.ExpenseRedDark
-import com.startupmini.nyachat.ui.theme.ExpenseRedLight
-import com.startupmini.nyachat.ui.theme.IncomeGreen
-import com.startupmini.nyachat.ui.theme.IncomeGreenDark
-import com.startupmini.nyachat.ui.theme.IncomeGreenLight
-import com.startupmini.nyachat.ui.theme.MoneyTagExpenseDark
-import com.startupmini.nyachat.ui.theme.MoneyTagIncomeDark
+import com.startupmini.nyachat.ui.theme.LocalSemanticColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToLong
 
-/** Format nominal untuk prefill kolom edit (angka bulat tanpa desimal). */
-private fun formatAmountInput(amount: Double): String =
-    if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+/** Simpan hanya digit mentah di state ("Rp 50.000" → "50000"). */
+internal fun amountDigitsOnly(input: String): String = input.filter { it.isDigit() }
+
+/** Tampilan grouping ribuan id-ID: "50000" → "50.000" (tanpa NumberFormat supaya
+ *  stabil & murni — mudah di-unit-test). */
+internal fun formatAmountDisplay(digits: String): String {
+    if (digits.isEmpty()) return ""
+    val sb = StringBuilder()
+    val reversed = digits.reversed()
+    reversed.forEachIndexed { index, c ->
+        sb.append(c)
+        if ((index + 1) % 3 == 0 && index + 1 < reversed.length) sb.append('.')
+    }
+    return sb.reverse().toString()
+}
+
+/** Parse teks nominal (mentah maupun berformat) menjadi Double; null jika tidak valid. */
+internal fun parseAmount(text: String): Double? {
+    val digits = text.replace(".", "")
+    return if (digits.isEmpty()) null else digits.toDoubleOrNull()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,8 +90,10 @@ fun AddTransactionDialog(
 ) {
     val isEdit = transaction != null
     var type by remember { mutableStateOf(transaction?.type ?: Constants.TransactionTypes.EXPENSE) }
+    // State nominal = digit mentah; grouping ribuan dihitung hanya untuk tampilan
+    // (audit P1.4). Prefill edit dibulatkan ke rupiah penuh.
     var amountText by remember {
-        mutableStateOf(transaction?.let { formatAmountInput(it.amount) } ?: "")
+        mutableStateOf(transaction?.amount?.roundToLong()?.toString() ?: "")
     }
     var description by remember { mutableStateOf(transaction?.description ?: "") }
     val loggedBy = remember {
@@ -95,7 +111,7 @@ fun AddTransactionDialog(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
-    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val semantic = LocalSemanticColors.current
 
     // F3 (audit focus order): fokus langsung ke kolom Jumlah saat sheet terbuka —
     // sebelumnya Tab pertama mendarat di chip tipe (perlu 2× Tab untuk ke field).
@@ -116,13 +132,17 @@ fun AddTransactionDialog(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shape = RoundedCornerShape(topStart = Constants.Ui.CORNER_XL.dp, topEnd = Constants.Ui.CORNER_XL.dp),
         dragHandle = null,
+        // Sheet hidup di area konten (berhenti di atas NavigationBar) — padding
+        // navbar bawaan sheet malah membuat celah, jadi dinolkan. Insets IME
+        // ditangani windowInsetsPadding di konten bawah.
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
+                .windowInsetsPadding(WindowInsets.ime)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
         ) {
@@ -164,8 +184,8 @@ fun AddTransactionDialog(
                     },
                     label = { Text(stringResource(R.string.add_type_expense), fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = if (isDark) MoneyTagExpenseDark else ExpenseRedLight,
-                        selectedLabelColor = if (isDark) ExpenseRedDark else ExpenseRed,
+                        selectedContainerColor = semantic.expenseBg,
+                        selectedLabelColor = semantic.expense,
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -180,8 +200,8 @@ fun AddTransactionDialog(
                     },
                     label = { Text(stringResource(R.string.add_type_income), fontWeight = FontWeight.Medium) },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = if (isDark) MoneyTagIncomeDark else IncomeGreenLight,
-                        selectedLabelColor = if (isDark) IncomeGreenDark else IncomeGreen,
+                        selectedContainerColor = semantic.incomeBg,
+                        selectedLabelColor = semantic.income,
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -191,13 +211,15 @@ fun AddTransactionDialog(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Amount Input
-            val amountVal = amountText.toDoubleOrNull() ?: 0.0
+            // Amount Input — grouping ribuan live + prefix "Rp" (audit P1.4).
+            // State menyimpan digit mentah; validasi & simpan men-strip separator.
+            val amountVal = parseAmount(amountText) ?: 0.0
             val isAmountInvalid = amountText.isNotBlank() && amountVal <= 0
             OutlinedTextField(
-                value = amountText,
-                onValueChange = { amountText = it },
-                label = { Text(stringResource(R.string.add_amount_label)) },
+                value = formatAmountDisplay(amountText),
+                onValueChange = { amountText = amountDigitsOnly(it) },
+                label = { Text(stringResource(R.string.add_amount_label_plain)) },
+                leadingIcon = { Text("Rp", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold) },
                 placeholder = { Text(stringResource(R.string.add_amount_placeholder)) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = isAmountInvalid,
@@ -209,7 +231,7 @@ fun AddTransactionDialog(
                     .focusRequester(amountFocusRequester)
                     .testTag("add_dialog_amount_field"),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Constants.Ui.CORNER_M.dp)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -224,7 +246,7 @@ fun AddTransactionDialog(
                     .fillMaxWidth()
                     .testTag("add_dialog_desc_field"),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(Constants.Ui.CORNER_M.dp)
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -241,7 +263,7 @@ fun AddTransactionDialog(
                     readOnly = true,
                     label = { Text(stringResource(R.string.add_category_label)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCategoryMenu) },
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(Constants.Ui.CORNER_M.dp),
                     modifier = Modifier
                         .menuAnchor(androidx.compose.material3.MenuAnchorType.PrimaryNotEditable, true)
                         .fillMaxWidth()
@@ -254,6 +276,14 @@ fun AddTransactionDialog(
                     categories.forEach { cat ->
                         DropdownMenuItem(
                             text = { Text(cat) },
+                            // Ikon kategori di dropdown (bonus audit P1.4) — sama
+                            // dengan ikon di riwayat rekap.
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = getCategoryIcon(cat),
+                                    contentDescription = null
+                                )
+                            },
                             onClick = {
                                 selectedCategory = cat
                                 expandedCategoryMenu = false
@@ -273,14 +303,14 @@ fun AddTransactionDialog(
                 OutlinedButton(
                     onClick = ::dismiss,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(Constants.Ui.CORNER_M.dp)
                 ) {
                     Text(stringResource(R.string.add_cancel))
                 }
 
                 Button(
                     onClick = {
-                        val finalAmount = amountText.toDoubleOrNull() ?: 0.0
+                        val finalAmount = parseAmount(amountText) ?: 0.0
                         onConfirm(
                             FinancialTransaction(
                                 id = transaction?.id ?: 0,
@@ -296,12 +326,12 @@ fun AddTransactionDialog(
                         )
                         onDismiss()
                     },
-                    enabled = description.isNotBlank() && amountText.isNotBlank() && (amountText.toDoubleOrNull() ?: 0.0) > 0,
+                    enabled = description.isNotBlank() && amountText.isNotBlank() && (parseAmount(amountText) ?: 0.0) > 0,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("add_dialog_save_button"),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(Constants.Ui.CORNER_M.dp)
                 ) {
                     Text(stringResource(R.string.add_save), fontWeight = FontWeight.SemiBold)
                 }

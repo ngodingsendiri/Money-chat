@@ -12,6 +12,10 @@ interface ChatMessageDao {
     @Query("SELECT * FROM chat_messages ORDER BY timestamp ASC")
     fun getAllMessages(): Flow<List<ChatMessage>>
 
+    // REPLACE (bukan ABORT): dengan index unik cloudId, merge dari snapshot
+    // listener yang balapan harus KONVERGEN, bukan crash. Aman karena upsert di
+    // FirestoreSyncManager resolve baris lewat getByCloudId dulu (id lokal dijaga)
+    // dan sendMessage selalu menyertakan id lokal pada insert kedua.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: ChatMessage): Long
 

@@ -13,6 +13,7 @@ import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 /**
@@ -40,8 +41,12 @@ class FinanceRepository(
         private const val TAG = "FinanceRepository"
     }
 
-    val allMessages: Flow<List<ChatMessage>> = chatMessageDao.getAllMessages()
-    val allTransactions: Flow<List<FinancialTransaction>> = transactionDao.getAllTransactions()
+    val allMessages: Flow<List<ChatMessage>> =
+        chatMessageDao.getAllMessages().map { it.dedupeByCloudId() }
+    // Guard dedupe transaksi (paritas dengan pesan) — lapisan pertahanan kedua di
+    // atas index unik cloudId, supaya UI tidak pernah menampilkan angka ganda.
+    val allTransactions: Flow<List<FinancialTransaction>> =
+        transactionDao.getAllTransactions().map { it.dedupeByCloudId() }
 
     /** Aktifkan sinkronisasi cloud (wajib sudah login Google + listener realtime). */
     suspend fun startCloudSync(pin: String, role: String = Constants.Roles.MEMBER) {
@@ -64,8 +69,8 @@ class FinanceRepository(
         fileName: String? = null,
         replyToSender: String? = null,
         replyToText: String? = null
-    ) {
-        withContext(Dispatchers.IO) {
+    ): FinancialTransaction? {
+        return withContext(Dispatchers.IO) {
             // 1. Insert user chat message (cloudId unik lintas perangkat; imagePath = foto
             //    nota lokal; filePath/fileName = dokumen; replyTo* = pesan yang dibalas)
             val initialMsg = ChatMessage(
@@ -89,6 +94,7 @@ class FinanceRepository(
             val aiResult = aiService.parseMessage(messageText, sender, recentList, imagePath)
 
             var finalMsg = initialMsg.copy(id = msgId)
+            var createdTx: FinancialTransaction? = null
 
             if (aiResult.containsTransaction && aiResult.amount != null && aiResult.amount > 0) {
                 val trans = FinancialTransaction(
@@ -101,7 +107,8 @@ class FinanceRepository(
                     chatMessageId = msgId,
                     cloudId = UUID.randomUUID().toString()
                 )
-                transactionDao.insertTransaction(trans)
+                val txId = transactionDao.insertTransaction(trans)
+                createdTx = trans.copy(id = txId)
 
                 // Update user message with financial badge tags on the message itself
                 finalMsg = initialMsg.copy(
@@ -121,6 +128,7 @@ class FinanceRepository(
             FirestoreSyncManager.syncMessage(finalMsg)
 
             // NO AUTOMATIC AI CHAT BUBBLE HERE! Chat stays clean between Husband & Wife.
+            createdTx
         }
     }
 
@@ -162,7 +170,9 @@ class FinanceRepository(
                         category = updated.detectedCategory ?: existingTx.category,
                         amount = updated.detectedAmount ?: existingTx.amount,
                         description = newText,
-                        loggedBy = existing.sender
+                        loggedBy = existing.sender,
+                        // Cap waktu edit — dasar resolusi konflik sync (last-writer-by-time)
+                        editedAt = System.currentTimeMillis()
                     )
                     transactionDao.updateTransaction(newTx)
                     FirestoreSyncManager.syncTransaction(newTx)
@@ -212,11 +222,13 @@ class FinanceRepository(
         }
     }
 
-    suspend fun addManualTransaction(transaction: FinancialTransaction) {
-        withContext(Dispatchers.IO) {
+    suspend fun addManualTransaction(transaction: FinancialTransaction): FinancialTransaction {
+        return withContext(Dispatchers.IO) {
             val withCloud = transaction.copy(cloudId = transaction.cloudId ?: UUID.randomUUID().toString())
-            transactionDao.insertTransaction(withCloud)
-            FirestoreSyncManager.syncTransaction(withCloud)
+            val txId = transactionDao.insertTransaction(withCloud)
+            val inserted = withCloud.copy(id = txId)
+            FirestoreSyncManager.syncTransaction(inserted)
+            inserted
         }
     }
 
@@ -229,17 +241,20 @@ class FinanceRepository(
      */
     suspend fun updateTransaction(transaction: FinancialTransaction) {
         withContext(Dispatchers.IO) {
-            transactionDao.updateTransaction(transaction)
+            // Cap waktu edit — dipakai resolusi konflik sync (last-writer-by-time)
+            // supaya edit bersamaan di dua perangkat tidak saling menindas acak.
+            val edited = transaction.copy(editedAt = System.currentTimeMillis())
+            transactionDao.updateTransaction(edited)
 
-            transaction.chatMessageId?.let { messageId ->
+            edited.chatMessageId?.let { messageId ->
                 chatMessageDao.getById(messageId)?.let { msg ->
-                    val updatedMsg = transaction.applyFinancialBadgeTo(msg)
+                    val updatedMsg = edited.applyFinancialBadgeTo(msg)
                     chatMessageDao.updateMessage(updatedMsg)
                     FirestoreSyncManager.syncMessage(updatedMsg)
                 }
             }
 
-            transaction.cloudId?.let { FirestoreSyncManager.syncTransaction(transaction) }
+            edited.cloudId?.let { FirestoreSyncManager.syncTransaction(edited) }
         }
     }
 
@@ -324,6 +339,14 @@ class FinanceRepository(
                 )
             }
 
+            // Hapus dulu dokumen cloud yang TIDAK ada di backup — tanpa ini,
+            // dokumen lama bertahan di cloud dan muncul lagi di perangkat lain
+            // walau restore seharusnya mengganti seluruh data lokal + cloud.
+            FirestoreSyncManager.deleteAbsentFromBackup(
+                keptMessageCloudIds = messages.mapNotNull { it.cloudId }.toSet(),
+                keptTransactionCloudIds = transactions.mapNotNull { it.cloudId }.toSet()
+            )
+
             transactions.forEach { t ->
                 t.cloudId?.let {
                     FirestoreSyncManager.syncTransaction(
@@ -376,3 +399,53 @@ internal fun ChatMessage.clearFinancialBadge(): ChatMessage =
         detectedCategory = null,
         detectedType = null
     )
+
+/**
+ * Guard dedup bubble (Sprint-3): satu cloudId harus tampil sebagai SATU bubble.
+ * Baris duplikat bisa muncul dari race restore + snapshot listener atau backup
+ * lama yang berisi id ganda. Pemenang = versi dengan waktu efektif (editedAt
+ * ?: timestamp) terbaru; seri → id lokal terbesar. Pesan tanpa cloudId selalu
+ * dipertahankan, dan urutan asli tidak diubah. Murni — mudah di-unit-test.
+ */
+internal fun List<ChatMessage>.dedupeByCloudId(): List<ChatMessage> {
+    val winners = HashMap<String, ChatMessage>()
+    for (m in this) {
+        val cid = m.cloudId ?: continue
+        val cur = winners[cid]
+        if (cur == null || m.effectiveTime() > cur.effectiveTime() ||
+            (m.effectiveTime() == cur.effectiveTime() && m.id > cur.id)
+        ) {
+            winners[cid] = m
+        }
+    }
+    if (winners.size == count { it.cloudId != null }) return this // fast path: tanpa duplikat
+    return filter { m -> m.cloudId == null || winners[m.cloudId] === m }
+}
+
+private fun ChatMessage.effectiveTime(): Long = editedAt ?: timestamp
+
+/**
+ * Guard dedupe transaksi (paritas dengan [ChatMessage] di atas): satu cloudId
+ * harus tampil sebagai SATU transaksi di Rekap. Baris duplikat bisa muncul dari
+ * race restore + snapshot listener atau backup lama yang berisi id ganda.
+ * Pemenang = versi dengan waktu efektif (editedAt ?: timestamp) terbaru;
+ * seri → id lokal terbesar. Transaksi tanpa cloudId selalu dipertahankan, dan
+ * urutan asli tidak diubah. Murni — mudah di-unit-test.
+ */
+@JvmName("dedupeTransactionsByCloudId") // hindari tabrakan tanda tangan JVM dengan versi ChatMessage
+internal fun List<FinancialTransaction>.dedupeByCloudId(): List<FinancialTransaction> {
+    val winners = HashMap<String, FinancialTransaction>()
+    for (t in this) {
+        val cid = t.cloudId ?: continue
+        val cur = winners[cid]
+        if (cur == null || t.effectiveTime() > cur.effectiveTime() ||
+            (t.effectiveTime() == cur.effectiveTime() && t.id > cur.id)
+        ) {
+            winners[cid] = t
+        }
+    }
+    if (winners.size == count { it.cloudId != null }) return this // fast path: tanpa duplikat
+    return filter { t -> t.cloudId == null || winners[t.cloudId] === t }
+}
+
+private fun FinancialTransaction.effectiveTime(): Long = editedAt ?: timestamp

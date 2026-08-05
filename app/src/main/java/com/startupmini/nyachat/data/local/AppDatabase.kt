@@ -9,8 +9,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatMessage::class, FinancialTransaction::class, PendingOp::class],
-    version = 6,
-    exportSchema = false
+    version = 8,
+    // Skema diekspor ke app/schemas (room.schemaLocation di build.gradle.kts)
+    // supaya sejarah migrasi bisa direview di code review.
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chatMessageDao(): ChatMessageDao
@@ -68,6 +70,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v6 -> v7: kolom editedAt di transaksi — resolusi konflik sync
+        // last-writer-by-time saat dua perangkat mengedit transaksi yang sama.
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN editedAt INTEGER")
+            }
+        }
+
+        // v7 -> v8: index unik cloudId di financial_transactions (paritas dengan
+        // chat_messages). Duplikat yang terlanjur ada dibuang dulu — dijaga baris
+        // dengan id lokal terbesar per cloudId — supaya CREATE UNIQUE INDEX tidak
+        // gagal di perangkat yang sudah punya data duplikat.
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "DELETE FROM financial_transactions WHERE cloudId IS NOT NULL AND id NOT IN (" +
+                        "SELECT MAX(id) FROM financial_transactions WHERE cloudId IS NOT NULL GROUP BY cloudId)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_financial_transactions_cloudId ON financial_transactions(cloudId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_financial_transactions_timestamp ON financial_transactions(timestamp)")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -75,7 +100,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "keuangan_pasutri_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build()
                 INSTANCE = instance
                 instance

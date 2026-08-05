@@ -141,6 +141,36 @@ class DataExporterTest {
         assertEquals(1, parsed!!.formatVersion)
     }
 
+    // ---------- Backup terenkripsi (Sprint-2) ----------
+
+    @Test
+    fun backupTerenkripsiBisaDiparseDenganPassphraseBenar() {
+        val plain = DataExporter.buildBackupJson(transactions, messages, "2.0.0", familyId = "12345678")
+        val envelope = BackupCrypto.encryptToEnvelope(plain, "rahasia123", iterations = 1_000)
+
+        val parsed = DataExporter.parseBackupJson(envelope, "rahasia123")
+        assertNotNull(parsed)
+        assertEquals(2, parsed!!.transactions.size)
+        assertEquals("12345678", parsed.familyId)
+    }
+
+    @Test
+    fun backupTerenkripsiTanpaPassphraseDitolak() {
+        val plain = DataExporter.buildBackupJson(transactions, messages, "2.0.0")
+        val envelope = BackupCrypto.encryptToEnvelope(plain, "rahasia123", iterations = 1_000)
+        // Tanpa passphrase (atau passphrase salah) amplop tidak bisa dibuka.
+        assertNull(DataExporter.parseBackupJson(envelope))
+        assertNull(DataExporter.parseBackupJson(envelope, "salah"))
+    }
+
+    @Test
+    fun backupPlaintextTetapBisaDiparseTanpaPassphrase() {
+        // Backward-compat: backup lama tanpa amplop tetap jalan di jalur baru.
+        val plain = DataExporter.buildBackupJson(transactions, messages, "2.0.0")
+        assertNotNull(DataExporter.parseBackupJson(plain, null))
+        assertNotNull(DataExporter.parseBackupJson(plain, "passphrase-tak-dipakai"))
+    }
+
     // ---------- CSV (P4-5) ----------
 
     @Test

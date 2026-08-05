@@ -25,6 +25,18 @@
     <string name="pin_settings_hint">PIN ini menghubungkan semua perangkat ke workspace keluarga yang sama. Bagikan PIN ini agar pasangan/anggota bisa bergabung dari perangkat lain.</string>
     <string name="pin_settings_copy">Salin PIN</string>
 
+    <!-- Rekap: navigasi bulan -->
+    <string name="rekap_month_all">Semua</string>
+    <string name="rekap_prev_month_desc">Bulan sebelumnya</string>
+    <string name="rekap_next_month_desc">Bulan berikutnya</string>
+    <string name="rekap_category_filter_active">Filter: %1$s</string>
+    <string name="rekap_category_filter_clear">Hapus filter kategori</string>
+    <string name="rekap_trend_new">Baru</string>
+
+    <!-- Chat: badge transaksi -->
+    <string name="chat_open_transaction_desc">Buka transaksi</string>
+    <string name="chat_transaction_not_found">Transaksi untuk pesan ini tidak ditemukan.</string>
+
     <!-- Dialog konfirmasi & API key -->
     <string name="confirm_clear_title">Hapus Semua Data?</string>
     <string name="confirm_clear_message">Semua pesan obrolan dan transaksi keuangan akan dihapus permanen. Tindakan ini tidak dapat dibatalkan.</string>
@@ -55,6 +67,8 @@
     <string name="sender_ai">Asisten AI</string>
 
     <!-- Rekap -->
+    <string name="rekap_insights_title">Insight Otomatis</string>
+    <string name="rekap_insights_subtitle">Tren &amp; pola keuanganmu, dihitung langsung di perangkat</string>
     <string name="rekap_ai_title">Analisis AI Finansial</string>
     <string name="rekap_ai_subtitle">Dapatkan rekomendasi alokasi kas &amp; hemat anggaran</string>
     <string name="rekap_ai_action">Evaluasi</string>
@@ -111,7 +125,7 @@
     <string name="google_err_credential_provider">Google menolak permintaan masuk (kode %1$s). Biasanya SHA-1 kunci penandatangan APK ini belum terdaftar di Firebase Console → Pengaturan project → Aplikasi Anda → Tambahkan sidik jari SHA-1 (lihat README → \'Setup Google Sign-In\').</string>
     <string name="google_err_sha1_hint">\n\nSHA-1 APK ini: %1$s\nSalin angka ini, lalu daftarkan di Firebase Console → Pengaturan project → Aplikasi Anda → Tambahkan sidik jari. Login mulai berjalan ±5 menit setelah didaftarkan.</string>
     <string name="google_not_configured">Google Sign-In belum dikonfigurasi. Aktifkan Google di Firebase Console (Authentication → Sign-in method) &amp; daftarkan SHA-1 penandatangan APK (lihat README → \'Setup Google Sign-In\'), lalu unduh ulang google-services.json dan ganti file di folder app/.</string>
-    <string name="login_version_label">Nyachat r%1$s · build %2$d</string>
+    <string name="login_version_label">Nyachat %1$s · build %2$d</string>
     <string name="pin_name_label">Nama Anda (Cth: Suami / Istri)</string>
     <string name="pin_your_pin">PIN Anda</string>
     <string name="pin_share_hint">Gunakan PIN ini untuk menghubungkan akun pada perangkat lain.</string>
@@ -126,6 +140,7 @@
     <string name="pin_default_google_name">Anggota</string>
     <string name="pin_create_warning">PIN ini adalah kata sandi bersama workspace. Siapa pun yang memilikinya dapat melihat &amp; mengubah data keuangan keluarga. Bagikan hanya lewat jalur pribadi yang Anda percaya.</string>
     <string name="pin_join_warning">PIN adalah kata sandi bersama workspace. Hanya masukkan PIN dari anggota yang Anda percaya — pemegang PIN dapat melihat &amp; mengubah seluruh data keuangan.</string>
+    <string name="pin_rate_limited">Terlalu banyak percobaan PIN. Coba lagi dalam %1$d detik.</string>
     <string name="pin_role_owner">Pemilik</string>
     <string name="pin_role_member">Anggota</string>
     <string name="logout_dialog_title">Keluar dari akun ini?</string>
@@ -142,7 +157,8 @@
     <string name="add_type_expense">Pengeluaran</string>
     <string name="add_type_income">Pemasukan</string>
     <string name="add_amount_label">Nominal (Rp)</string>
-    <string name="add_amount_placeholder">Contoh: 150000</string>
+    <string name="add_amount_label_plain">Nominal</string>
+    <string name="add_amount_placeholder">Contoh: 150.000</string>
     <string name="add_amount_error">Nominal harus lebih dari 0</string>
     <string name="add_desc_label">Keterangan Transaksi</string>
     <string name="add_desc_placeholder">Contoh: Belanja bahan pokok harian</string>
@@ -154,8 +170,13 @@
     <string name="add_cancel">Batal</string>
     <string name="add_save">Simpan</string>
 
+    <!-- Feedback transaksi tercatat (audit P1.2) -->
+    <string name="tx_recorded">Tercatat: %1$s</string>
+    <string name="action_undo">Urungkan</string>
+
     <!-- Laporan AI -->
     <string name="report_title">Laporan Evaluasi Keuangan AI</string>
+    <string name="report_subtitle">Analisis keuangan oleh AI</string>
     <string name="report_close_desc">Tutup</string>
     <string name="report_close">Tutup Laporan</string>
 
@@ -215,6 +236,14 @@
     <string name="restore_success">Backup berhasil dipulihkan! Semua chat &amp; transaksi sudah dikembalikan dan disinkronkan ke perangkat lain.</string>
     <string name="restore_cross_family_title">Backup dari workspace lain</string>
     <string name="restore_cross_family_message">Backup ini dibuat di workspace (PIN) yang berbeda. Melanjutkan akan mengganti seluruh data lokal dan menyinkronkan isi backup ke workspace saat ini. Lanjut?</string>
+    <string name="restore_wrong_passphrase">Passphrase salah atau file backup rusak. Coba lagi dengan passphrase yang dipakai saat backup dibuat.</string>
+    <string name="backup_passphrase_title">Enkripsi Backup</string>
+    <string name="backup_passphrase_message">Backup akan dienkripsi dengan passphrase ini. Passphrase TIDAK disimpan — tanpa passphrase, backup tidak bisa dipulihkan. Pastikan mudah kamu ingat!</string>
+    <string name="backup_passphrase_hint">Passphrase (min. 8 karakter)</string>
+    <string name="restore_passphrase_title">Backup Terenkripsi</string>
+    <string name="restore_passphrase_message">Backup ini terenkripsi. Masukkan passphrase yang dipakai saat backup dibuat untuk membukanya.</string>
+    <string name="settings_backup_encrypt">Enkripsi backup Drive</string>
+    <string name="settings_backup_encrypt_desc">Lindungi file backup dengan passphrase (AES-256). Auto-backup harian dijeda saat aktif.</string>
     <string name="restore_failed">Gagal mengunduh backup dari Google Drive.</string>
     <string name="restore_failed_parse">File backup tidak valid atau rusak.</string>
 
@@ -233,6 +262,13 @@
     <string name="settings_section_general">Umum</string>
     <string name="settings_section_ai">AI &amp; API</string>
     <string name="settings_section_account">Akun</string>
+    <string name="settings_section_data">Data &amp; Backup</string>
+    <string name="settings_section_danger">Zona Berbahaya</string>
+    <string name="settings_last_backup_title">Backup terakhir</string>
+    <string name="settings_last_backup_never">Belum pernah</string>
+    <string name="settings_last_backup_time">%1$s · %2$s</string>
+    <string name="settings_backup_encrypted_yes">Terenkripsi</string>
+    <string name="settings_backup_encrypted_no">Tanpa enkripsi</string>
     <string name="sync_status_synced">Tersinkron</string>
     <string name="sync_status_syncing">Menyinkronkan…</string>
     <string name="sync_status_offline">Offline</string>

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,6 +63,9 @@ fun AiReportDialog(
         containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         dragHandle = null, // kita buat custom drag handle di dalam
+        // Sheet berada di area konten (di atas NavigationBar) — padding navbar
+        // bawaan sheet dinolkan agar tidak muncul celah.
+        contentWindowInsets = { WindowInsets(0) },
     ) {
         Column(
             modifier = Modifier
@@ -115,7 +119,7 @@ fun AiReportDialog(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Analisis keuangan oleh AI",
+                            text = stringResource(R.string.report_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

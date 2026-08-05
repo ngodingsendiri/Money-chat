@@ -1,7 +1,9 @@
 package com.startupmini.nyachat.data.remote
 
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -66,5 +68,73 @@ class GeminiServiceHeuristicParseTest {
         assertTrue(r.containsTransaction)
         assertEquals("Kebutuhan Anak", r.category)
         assertEquals(45000.0, r.amount!!, 0.001)
+    }
+
+    // ---- Sprint-1 fix: angka bersatuan dimenangkan atas angka polos pertama ----
+
+    @Test
+    fun angkaBersatuanDimenangkanAtasKuantitasDiDepannya() {
+        // Bug lama: angka pertama "2" diambil -> Rp 2.000. Sekarang 20rb -> Rp 20.000.
+        val r = GeminiService.offlineHeuristicParse("beli 2 kopi 20rb", "Suami")
+        assertTrue(r.containsTransaction)
+        assertEquals("PENGELUARAN", r.type)
+        assertEquals("Makanan & Minuman", r.category)
+        assertEquals(20000.0, r.amount!!, 0.001)
+    }
+
+    @Test
+    fun angkaBersatuanKDimenangkanAtasKuantitas() {
+        val r = GeminiService.offlineHeuristicParse("beli 3 botol minum 10k", "Istri")
+        assertTrue(r.containsTransaction)
+        assertEquals(10000.0, r.amount!!, 0.001)
+    }
+
+    @Test
+    fun angkaBersatuanPertamaYangMenangBilaAdaBeberapa() {
+        val r = GeminiService.offlineHeuristicParse("bayar 2 juta lalu beli kopi 20rb", "Suami")
+        assertTrue(r.containsTransaction)
+        assertEquals(2000000.0, r.amount!!, 0.001)
+    }
+
+    @Test
+    fun hurufKataBukanSatuanRibuan() {
+        // 'k' pada "kopi" tidak boleh terbaca sebagai satuan ribu —
+        // tanpa angka bersatuan, fallback angka pertama tetap berlaku.
+        assertEquals(2000.0, GeminiService.extractAmountFromText("beli 2 kopi")!!, 0.001)
+    }
+
+    @Test
+    fun fallbackAngkaPolosKecilTetapDianggapRibuan() {
+        val r = GeminiService.offlineHeuristicParse("beli bakso 15", "Suami")
+        assertTrue(r.containsTransaction)
+        assertEquals(15000.0, r.amount!!, 0.001)
+    }
+
+    @Test
+    fun tanpaAngkaTidakAdaNominal() {
+        assertNull(GeminiService.extractAmountFromText("halo apa kabar"))
+    }
+
+    // ---- Sprint-1/2 fix B6: wrapper timeout menyelubungi kaskade AI ----
+
+    @Test
+    fun parseChatMessageTanpaKeyJatuhKeHeuristikLewatWrapperTimeout() = runBlocking {
+        // Tanpa API key apa pun, kaskade di dalam withTimeoutOrNull langsung
+        // null → fallback heuristik. Memastikan wrapper tidak memutus jalur
+        // offline maupun menggantung.
+        val prevGemini = GeminiService.userApiKey
+        val prevOpenRouter = OpenRouterService.userApiKey
+        try {
+            GeminiService.userApiKey = null
+            OpenRouterService.userApiKey = null
+
+            val r = GeminiService.parseChatMessage("beli bakso 15000", "Suami", emptyList())
+            assertTrue(r.containsTransaction)
+            assertEquals("PENGELUARAN", r.type)
+            assertEquals(15000.0, r.amount!!, 0.001)
+        } finally {
+            GeminiService.userApiKey = prevGemini
+            OpenRouterService.userApiKey = prevOpenRouter
+        }
     }
 }

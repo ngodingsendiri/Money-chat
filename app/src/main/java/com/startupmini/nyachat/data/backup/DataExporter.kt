@@ -162,8 +162,16 @@ object DataExporter {
      * Parse file backup. Return null kalau rusak / bukan backup Nyachat /
      * format backup lebih baru dari yang dipahami app (P1: tolak format masa
      * depan supaya restore tidak salah-parse lalu merusak data).
+     *
+     * Backup terenkripsi (amplop [BackupCrypto]) WAJIB diberi [passphrase];
+     * tanpa passphrase atau passphrase salah → null.
      */
-    fun parseBackupJson(json: String): BackupData? = runCatching {
+    fun parseBackupJson(json: String, passphrase: String? = null): BackupData? = runCatching {
+        if (BackupCrypto.isEncryptedEnvelope(json)) {
+            val p = passphrase ?: return null
+            val plain = BackupCrypto.decryptEnvelope(json, p) ?: return null
+            return parseBackupJson(plain)
+        }
         val root = JSONObject(json)
         val appTag = root.optString("app")
         // Backup lama ber-marker "MoneyChat" (sebelum rebrand) tetap diterima
@@ -201,6 +209,7 @@ object DataExporter {
             .put("description", t.description)
             .put("loggedBy", t.loggedBy)
             .put("timestamp", t.timestamp)
+            .putOpt("editedAt", t.editedAt)
             .putOpt("chatMessageId", t.chatMessageId)
             .putOpt("cloudId", t.cloudId)
 
@@ -231,6 +240,7 @@ object DataExporter {
             description = o.optString("description", ""),
             loggedBy = o.optString("loggedBy", ""),
             timestamp = o.optLong("timestamp", 0L),
+            editedAt = o.optNullableLong("editedAt"),
             chatMessageId = o.optNullableLong("chatMessageId"),
             cloudId = o.optNullableString("cloudId")
         )

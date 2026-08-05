@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -66,6 +67,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,6 +80,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -118,6 +124,7 @@ import com.startupmini.nyachat.data.remote.GitHubRelease
 import com.startupmini.nyachat.data.remote.GitHubUpdateChecker
 import com.startupmini.nyachat.ui.theme.CoupleFinanceTheme
 import java.io.File
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -163,6 +170,7 @@ class MainActivity : ComponentActivity() {
                 val isAuditLoading by viewModel.isAuditLoading.collectAsStateWithLifecycle()
                 val monthlyReport by viewModel.monthlyReport.collectAsStateWithLifecycle()
                 val isMonthlyLoading by viewModel.isMonthlyLoading.collectAsStateWithLifecycle()
+                val weeklyInsights by viewModel.weeklyInsights.collectAsStateWithLifecycle()
                 val quickSuggestions by viewModel.quickSuggestions.collectAsStateWithLifecycle()
                 val syncStatus by com.startupmini.nyachat.data.remote.FirestoreSyncManager.syncStatus.collectAsStateWithLifecycle()
 
@@ -203,18 +211,66 @@ class MainActivity : ComponentActivity() {
                 var isDownloadingUpdate by remember { mutableStateOf(false) }
                 var updateMessage by remember { mutableStateOf<String?>(null) }
 
+                // ---- Snackbar (audit P1.1): feedback ringan (hasil export, info
+                // backup, "Tercatat + Urungkan") tanpa memblokir layar. Host
+                // dipasang overlay di Box konten, di atas NavigationBar.
+                val snackbarHostState = remember { SnackbarHostState() }
+                val showSnack: (String, String?, (() -> Unit)?) -> Unit = { message, actionLabel, onAction ->
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = message,
+                            actionLabel = actionLabel,
+                            duration = if (onAction != null) SnackbarDuration.Long else SnackbarDuration.Short
+                        )
+                        if (result == SnackbarResult.ActionPerformed) onAction?.invoke()
+                    }
+                }
+
+                // Feedback "Tercatat" + Urungkan (audit P1.2): setiap transaksi baru
+                // (dari chat maupun input manual) memunculkan Snackbar berisi ringkasan
+                // nominal + kategori; aksi Urungkan menghapus transaksi tersebut.
+                val recordedCurrency = remember {
+                    NumberFormat.getCurrencyInstance(Locale.forLanguageTag("id-ID")).apply {
+                        maximumFractionDigits = 0
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    val undoLabel = context.getString(R.string.action_undo)
+                    viewModel.transactionRecorded.collect { recorded ->
+                        val tx = recorded.transaction
+                        val prefix = if (tx.type == Constants.TransactionTypes.INCOME) "+" else "-"
+                        val summary = "$prefix ${recordedCurrency.format(tx.amount)} (${tx.category})"
+                        val message = context.getString(R.string.tx_recorded, summary)
+                        val result = snackbarHostState.showSnackbar(
+                            message = message,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            viewModel.deleteTransaction(tx)
+                        }
+                    }
+                }
+
                 // ---- Export CSV & Backup Google Drive ----
                 // P4-4: logika backup/restore Drive diekstrak ke DriveBackupController
                 // (data/backup) — MainActivity hanya meng-wire dependency & menampilkan
                 // state. Dependency di-assign ulang tiap komposisi supaya controller
                 // selalu membaca nilai state terkini (workspacePin, dsb.).
+                var backupEncrypted by remember { mutableStateOf(appPrefs.getBoolean(Constants.Prefs.BACKUP_ENCRYPTED, false)) }
+                // Waktu backup Drive terakhir (item 9) — state lokal supaya baris
+                // "Backup terakhir" di Pengaturan langsung ter-update tanpa reopen.
+                var lastBackupMillis by remember { mutableLongStateOf(appPrefs.getLong(Constants.Prefs.LAST_AUTO_BACKUP, 0L)) }
                 val driveController = remember { DriveBackupController(scope, context) }
                 driveController.getWorkspacePin = { workspacePin }
                 driveController.buildBackupJson = { viewModel.buildBackupJson(workspacePin) }
-                driveController.parseRestore = { viewModel.parseRestore(it) }
+                driveController.parseRestore = { json, passphrase -> viewModel.parseRestore(json, passphrase) }
                 driveController.restoreParsedBackup = { viewModel.restoreParsedBackup(it) }
+                driveController.getEncryptionEnabled = { backupEncrypted }
                 driveController.onSuccessfulBackup = {
-                    appPrefs.edit().putLong(Constants.Prefs.LAST_AUTO_BACKUP, System.currentTimeMillis()).apply()
+                    val now = System.currentTimeMillis()
+                    appPrefs.edit().putLong(Constants.Prefs.LAST_AUTO_BACKUP, now).apply()
+                    lastBackupMillis = now
                 }
                 val backupBusy by driveController.busy.collectAsStateWithLifecycle()
                 val backupMessage by driveController.message.collectAsStateWithLifecycle()
@@ -222,6 +278,21 @@ class MainActivity : ComponentActivity() {
                 val restoreTarget by driveController.restoreTarget.collectAsStateWithLifecycle()
                 val pendingCrossFamilyRestore by driveController.crossFamilyRestore.collectAsStateWithLifecycle()
                 val driveConsentIntent by driveController.consentIntent.collectAsStateWithLifecycle()
+                val backupPassphrasePrompt by driveController.passphrasePrompt.collectAsStateWithLifecycle()
+
+                // Pesan info backup/restore ringan → Snackbar (audit P1.1); dialog
+                // hanya untuk alur yang butuh keputusan (pilih file, konfirmasi,
+                // passphrase). CSV export & salin PIN ikut lewat jalur yang sama.
+                LaunchedEffect(backupMessage) {
+                    val msg = backupMessage
+                    if (msg != null) {
+                        // dismiss SETELAH snackbar selesai: kalau flow di-reset dulu,
+                        // kunci LaunchedEffect berubah dan korutin ini dibatalkan —
+                        // snackbar ikut terhapus seketika.
+                        snackbarHostState.showSnackbar(msg)
+                        driveController.dismissMessage()
+                    }
+                }
 
                 // Bersihkan sesi & kembali ke layar login setelah logout.
                 val performLogoutCleanup = {
@@ -353,9 +424,13 @@ class MainActivity : ComponentActivity() {
                                     out.write(csv.toByteArray(Charsets.UTF_8))
                                 }
                             }.isSuccess
-                            driveController.showMessage(context.getString(
-                                if (ok) R.string.export_csv_success else R.string.export_csv_failed
-                            ))
+                            showSnack(
+                                context.getString(
+                                    if (ok) R.string.export_csv_success else R.string.export_csv_failed
+                                ),
+                                null,
+                                null
+                            )
                         }
                     }
                 }
@@ -379,6 +454,15 @@ class MainActivity : ComponentActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     GlowingBackground()
+
+                    // Edge-to-edge (wajib di targetSdk 36): Column induk menata konten
+                    // vs NavigationBar secara vertikal. Box konten memakai weight(1f)
+                    // sehingga berhenti tepat di atas navbar — tanpa offset hardcoded,
+                    // dan insets navbar bawah ditangani NavigationBar sendiri (default
+                    // M3). Urutan komposisi menjaga focus order F1: TopAppBar → konten
+                    // → NavigationBar.
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
 
                     if (!secretsLoaded) {
                         // Loading singkat sambil secret (PIN/API key) didekripsi async.
@@ -444,8 +528,8 @@ class MainActivity : ComponentActivity() {
                                             Column {
                                                 Text(
                                                     text = stringResource(R.string.topbar_title),
+                                                    style = MaterialTheme.typography.titleMedium,
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 16.sp,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
@@ -453,15 +537,13 @@ class MainActivity : ComponentActivity() {
                                                     Text(
                                                         text = stringResource(R.string.topbar_member_count, uniqueSenders.size),
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontSize = 11.sp
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 } else if (uniqueSenders.size == 1) {
                                                     Text(
                                                         text = uniqueSenders.first(),
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        fontSize = 11.sp,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis
                                                     )
@@ -534,7 +616,18 @@ class MainActivity : ComponentActivity() {
                                             },
                                             onEditMessage = { id, newText -> viewModel.editMessage(id, newText) },
                                             onAskAiClicked = { viewModel.askAiInChat(it) },
-                                            onDeleteMessage = { viewModel.deleteChatMessage(it) }
+                                            onDeleteMessage = { viewModel.deleteChatMessage(it) },
+                                            onOpenTransaction = { msg ->
+                                                // Tap badge finansial (item 5): cari transaksi
+                                                // terkait via chatMessageId lalu buka dialog edit.
+                                                val tx = transactions.find { it.chatMessageId == msg.id }
+                                                if (tx != null) {
+                                                    editTarget = tx
+                                                    showAddDialog = true
+                                                } else {
+                                                    showSnack(context.getString(R.string.chat_transaction_not_found), null, null)
+                                                }
+                                            }
                                         )
 
                                         1 -> RekapScreen(
@@ -544,6 +637,7 @@ class MainActivity : ComponentActivity() {
                                             isAuditLoading = isAuditLoading,
                                             onGenerateAudit = { viewModel.generateAiAuditReport() },
                                             isMonthlyLoading = isMonthlyLoading,
+                                            insights = weeklyInsights,
                                             onGenerateMonthly = { viewModel.generateMonthlyAnalysis() },
                                             onAddTransactionClicked = {
                                                 editTarget = null
@@ -588,11 +682,19 @@ class MainActivity : ComponentActivity() {
                                 SettingsSheet(
                                     isDarkMode = isDarkMode,
                                     userName = userName,
+                                    workspaceRole = workspaceRole,
+                                    workspacePin = workspacePin,
                                     backupBusy = backupBusy,
+                                    isBackupEncrypted = backupEncrypted,
+                                    lastBackupMillis = lastBackupMillis,
                                     onDismiss = { showSettingsSheet = false },
                                     onToggleDarkMode = {
                                         isDarkMode = !isDarkMode
                                         appPrefs.edit().putBoolean(Constants.Prefs.IS_DARK_MODE, isDarkMode).apply()
+                                    },
+                                    onToggleBackupEncryption = {
+                                        backupEncrypted = !backupEncrypted
+                                        appPrefs.edit().putBoolean(Constants.Prefs.BACKUP_ENCRYPTED, backupEncrypted).apply()
                                     },
                                     onCheckUpdate = {
                                         showSettingsSheet = false
@@ -601,7 +703,7 @@ class MainActivity : ComponentActivity() {
                                             if (release != null && GitHubUpdateChecker.isNewer(release.versionName, BuildConfig.VERSION_NAME)) {
                                                 updateInfo = release
                                             } else {
-                                                updateMessage = context.getString(R.string.update_no_update)
+                                                showSnack(context.getString(R.string.update_no_update), null, null)
                                             }
                                         }
                                     },
@@ -677,7 +779,7 @@ class MainActivity : ComponentActivity() {
                                         Column {
                                             Text(
                                                 text = stringResource(R.string.pin_settings_hint),
-                                                fontSize = 13.sp,
+                                                style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                             Spacer(modifier = Modifier.height(14.dp))
@@ -703,7 +805,7 @@ class MainActivity : ComponentActivity() {
                                             onClick = {
                                                 workspacePin?.let {
                                                     clipboard.setText(AnnotatedString(it))
-                                                    driveController.showMessage(context.getString(R.string.pin_copied))
+                                                    showSnack(context.getString(R.string.pin_copied), null, null)
                                                 }
                                                 showPinDialog = false
                                             }
@@ -753,7 +855,7 @@ class MainActivity : ComponentActivity() {
                                         Column {
                                             Text(
                                                 text = stringResource(R.string.logout_dialog_message),
-                                                fontSize = 13.sp
+                                                style = MaterialTheme.typography.bodySmall
                                             )
                                             Spacer(modifier = Modifier.height(8.dp))
                                             TextButton(
@@ -765,7 +867,7 @@ class MainActivity : ComponentActivity() {
                                             ) {
                                                 Text(
                                                     stringResource(R.string.logout_keep_data),
-                                                    fontSize = 14.sp,
+                                                    style = MaterialTheme.typography.labelLarge,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
@@ -781,7 +883,7 @@ class MainActivity : ComponentActivity() {
                                                 Text(
                                                     stringResource(R.string.logout_delete_data),
                                                     color = MaterialTheme.colorScheme.error,
-                                                    fontSize = 14.sp,
+                                                    style = MaterialTheme.typography.labelLarge,
                                                     fontWeight = FontWeight.SemiBold
                                                 )
                                             }
@@ -945,7 +1047,7 @@ class MainActivity : ComponentActivity() {
                                     Spacer(modifier = Modifier.width(14.dp))
                                     Text(
                                         stringResource(R.string.backup_please_wait),
-                                        fontSize = 13.5.sp
+                                        style = MaterialTheme.typography.bodySmall
                                     )
                                 }
                             },
@@ -953,19 +1055,6 @@ class MainActivity : ComponentActivity() {
                             dismissButton = {
                                 TextButton(onClick = { driveController.cancelActiveOperation() }) {
                                     Text(stringResource(R.string.action_cancel))
-                                }
-                            }
-                        )
-                    }
-
-                    backupMessage?.let { msg ->
-                        AlertDialog(
-                            onDismissRequest = { driveController.dismissMessage() },
-                            title = { Text(stringResource(R.string.backup_info_title)) },
-                            text = { Text(msg) },
-                            confirmButton = {
-                                TextButton(onClick = { driveController.dismissMessage() }) {
-                                    Text(stringResource(R.string.action_ok))
                                 }
                             }
                         )
@@ -1043,13 +1132,78 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                }
 
-                // NavigationBar — diletakkan SETELAH konten (F1 audit focus order):
-                // Scaffold M3 menempatkan fokus TopBar → BottomBar → Konten sehingga Tab
-                // melompat ke navbar sebelum konten. Column manual → urutan fokus
-                // TopAppBar → konten → NavigationBar. Sembunyikan saat keyboard (IME)
-                // terbuka supaya tidak meninggalkan celah kosong.
+                    // Prompt passphrase (Sprint-2): muncul saat membuat backup
+                    // terenkripsi atau membuka backup terenkripsi saat restore.
+                    backupPassphrasePrompt?.let { prompt ->
+                        val isBackupPrompt = prompt is DriveBackupController.PassphrasePrompt.Backup
+                        var passphrase by remember(prompt) { mutableStateOf("") }
+                        AlertDialog(
+                            onDismissRequest = { driveController.cancelPassphrase() },
+                            title = {
+                                Text(
+                                    stringResource(
+                                        if (isBackupPrompt) R.string.backup_passphrase_title
+                                        else R.string.restore_passphrase_title
+                                    )
+                                )
+                            },
+                            text = {
+                                Column {
+                                    Text(
+                                        stringResource(
+                                            if (isBackupPrompt) R.string.backup_passphrase_message
+                                            else R.string.restore_passphrase_message
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = passphrase,
+                                        onValueChange = { passphrase = it },
+                                        singleLine = true,
+                                        visualTransformation = PasswordVisualTransformation(),
+                                        label = { Text(stringResource(R.string.backup_passphrase_hint)) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    enabled = passphrase.length >= 8,
+                                    onClick = { driveController.submitPassphrase(passphrase) }
+                                ) {
+                                    Text(stringResource(R.string.action_ok))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { driveController.cancelPassphrase() }) {
+                                    Text(stringResource(R.string.action_cancel))
+                                }
+                            }
+                        )
+                    }
+
+                    // Snackbar overlay (audit P1.1): tampil di semua layar. Offset
+                    // adaptif: windowInsetsPadding(ime) mengangkat host di atas
+                    // keyboard saat IME terbuka (navbar otomatis tersembunyi & konten
+                    // melebar ke bawah); tanpa IME cukup 16dp di atas NavigationBar —
+                    // menggantikan angka 96dp hardcoded.
+                    SnackbarHost(
+                        hostState = snackbarHostState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
+                            .padding(bottom = 16.dp)
+                    )
+                        }
+
+                // NavigationBar — anak terakhir Column induk (di bawah konten Box).
+                // F1 audit focus order: urutan komposisi TopAppBar → konten →
+                // NavigationBar tetap terjaga, dan layout kini pasti di bawah layar
+                // (sebagai sibling akar Compose ia ditempatkan overlap di tepi atas
+                // window). M3 NavigationBar menangani insets navbar bawah sendiri.
+                // Sembunyikan saat keyboard (IME) terbuka supaya konten memakai area
+                // bawah penuh.
                 val imeVisible = WindowInsets.isImeVisible
                 AnimatedVisibility(
                     visible = !imeVisible,
@@ -1082,6 +1236,8 @@ class MainActivity : ComponentActivity() {
                             label = { Text(stringResource(R.string.tab_rekap)) },
                             modifier = Modifier.testTag("tab_rekap")
                         )
+                    }
+                }
                     }
                 }
             }
@@ -1150,7 +1306,7 @@ fun ApiKeyDialog(
             Column {
                 Text(
                     text = hint,
-                    fontSize = 13.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(14.dp))

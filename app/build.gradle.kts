@@ -9,9 +9,9 @@ plugins {
 }
 
 // E1: versionName dari git tag (via CI property) atau default.
-// CI bisa set via -Papp.version=X.Y.Z. Local build fallback = 1.0.0.
+// CI bisa set via -Papp.version=X.Y.Z. Local build fallback = r1.0.0.
 // Skema rilis: tag r* (r1.0.0, r1.0.1, ...) — lihat GitHubUpdateChecker.
-private val appVersion: String = project.findProperty("appVersion") as String? ?: "1.0.0"
+private val appVersion: String = project.findProperty("appVersion") as String? ?: "r1.0.0"
 
 android {
   namespace = "com.startupmini.nyachat"
@@ -21,7 +21,7 @@ android {
     applicationId = "com.startupmini.nyachat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 19
+    versionCode = 20
     versionName = appVersion
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -91,6 +91,12 @@ secrets {
   ignoreList.add("OPENROUTER_API_KEY")
 }
 
+// Room: AppDatabase memakai exportSchema = true — skema per versi ditulis ke
+// app/schemas supaya sejarah migrasi bisa direview & diverifikasi.
+ksp {
+  arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
@@ -100,6 +106,7 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.compose.ui)
   implementation(libs.androidx.compose.ui.graphics)
+  implementation(libs.androidx.compose.ui.text.google.fonts)
   implementation(libs.androidx.compose.ui.tooling.preview)
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.lifecycle.runtime.compose)

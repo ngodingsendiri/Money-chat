@@ -82,4 +82,94 @@ class FinanceRepositoryTest {
         assertEquals(Constants.Categories.SALARY, updated.detectedCategory)
         assertEquals(5000000.0, updated.detectedAmount!!, 0.001)
     }
+
+    // ---- Sprint-3: guard dedup bubble (satu cloudId = satu bubble) ----
+
+    @Test
+    fun tanpaDuplikatDaftarTidakBerubah() {
+        val a = message.copy(id = 1, cloudId = "c-1")
+        val b = message.copy(id = 2, messageText = "kedua", cloudId = "c-2")
+        val result = listOf(a, b).dedupeByCloudId()
+        assertEquals(listOf(a, b), result)
+    }
+
+    @Test
+    fun duplikatCloudIdDimenangkanVersiEditTerbaru() {
+        val lama = message.copy(id = 1, messageText = "versi lama", timestamp = 100L, cloudId = "c-1")
+        val baru = message.copy(
+            id = 2, messageText = "versi edit", timestamp = 100L, editedAt = 200L, cloudId = "c-1"
+        )
+        // Urutan input dibalik — pemenang tetap versi edit, bukan yang datang duluan.
+        val result = listOf(lama, baru).dedupeByCloudId()
+        assertEquals(1, result.size)
+        assertEquals("versi edit", result[0].messageText)
+    }
+
+    @Test
+    fun duplikatWaktuSeriDimenangkanIdLokalTerbesar() {
+        val pertama = message.copy(id = 5, messageText = "pertama", timestamp = 100L, cloudId = "c-1")
+        val kedua = message.copy(id = 9, messageText = "kedua", timestamp = 100L, cloudId = "c-1")
+        val result = listOf(pertama, kedua).dedupeByCloudId()
+        assertEquals(1, result.size)
+        assertEquals("kedua", result[0].messageText)
+    }
+
+    @Test
+    fun pesanTanpaCloudIdSelaluDipertahankan() {
+        // Pesan lokal murni (belum tersinkron) tidak boleh ikut ter-dedup.
+        val lokal1 = message.copy(id = 1, cloudId = null)
+        val lokal2 = message.copy(id = 2, messageText = "sama", timestamp = 1L, cloudId = null)
+        val dup = message.copy(id = 3, cloudId = "c-1")
+        val dupLagi = message.copy(id = 4, editedAt = 50L, messageText = "pemenang", cloudId = "c-1")
+        val result = listOf(lokal1, lokal2, dup, dupLagi).dedupeByCloudId()
+        assertEquals(3, result.size)
+        assertEquals("pemenang", result[2].messageText)
+    }
+
+    @Test
+    fun dedupMenjagaUrutanAsliPesan() {
+        val a = message.copy(id = 1, messageText = "A", timestamp = 1L, cloudId = "c-1")
+        val b = message.copy(id = 2, messageText = "B", timestamp = 2L, cloudId = "c-2")
+        val aDup = message.copy(id = 3, messageText = "A-lama", timestamp = 0L, cloudId = "c-1")
+        val result = listOf(a, b, aDup).dedupeByCloudId()
+        assertEquals(listOf("A", "B"), result.map { it.messageText })
+    }
+
+    // ---- Paritas dedupe transaksi: satu cloudId = satu baris di Rekap ----
+
+    @Test
+    fun transaksiTanpaDuplikatTidakBerubah() {
+        val a = transaction.copy(id = 1, cloudId = "t-1")
+        val b = transaction.copy(id = 2, description = "kedua", cloudId = "t-2")
+        val result = listOf(a, b).dedupeByCloudId()
+        assertEquals(listOf(a, b), result)
+    }
+
+    @Test
+    fun duplikatTransaksiDimenangkanVersiEditTerbaru() {
+        val lama = transaction.copy(id = 1, amount = 10000.0, timestamp = 100L, cloudId = "t-1")
+        val baru = transaction.copy(id = 2, amount = 15000.0, timestamp = 100L, editedAt = 200L, cloudId = "t-1")
+        val result = listOf(lama, baru).dedupeByCloudId()
+        assertEquals(1, result.size)
+        assertEquals(15000.0, result[0].amount, 0.001)
+    }
+
+    @Test
+    fun duplikatTransaksiWaktuSeriDimenangkanIdTerbesar() {
+        val pertama = transaction.copy(id = 5, amount = 1000.0, timestamp = 100L, cloudId = "t-1")
+        val kedua = transaction.copy(id = 9, amount = 2000.0, timestamp = 100L, cloudId = "t-1")
+        val result = listOf(pertama, kedua).dedupeByCloudId()
+        assertEquals(1, result.size)
+        assertEquals(2000.0, result[0].amount, 0.001)
+    }
+
+    @Test
+    fun transaksiLokalTanpaCloudIdSelaluDipertahankan() {
+        val lokal = transaction.copy(id = 1, cloudId = null)
+        val dup = transaction.copy(id = 2, amount = 1000.0, cloudId = "t-1")
+        val dupBaru = transaction.copy(id = 3, amount = 9000.0, editedAt = 50L, cloudId = "t-1")
+        val result = listOf(lokal, dup, dupBaru).dedupeByCloudId()
+        assertEquals(2, result.size)
+        assertEquals(9000.0, result[1].amount, 0.001)
+    }
 }
