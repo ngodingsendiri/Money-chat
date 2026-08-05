@@ -248,12 +248,11 @@ fun PinConnectScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.finance_onboarding_illustration_1785083674950),
+                    painter = painterResource(id = R.drawable.ic_logo),
                     contentDescription = stringResource(R.string.pin_image_desc),
-                    contentScale = ContentScale.Crop,
+                    contentScale = ContentScale.Fit,
                     modifier = Modifier
-                        .size(150.dp)
-                        .clip(RoundedCornerShape(28.dp))
+                        .size(120.dp)
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))

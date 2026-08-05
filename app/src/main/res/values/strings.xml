@@ -105,7 +105,7 @@
     <string name="tag_other">👤 %1$s</string>
 
     <!-- PIN / onboarding -->
-    <string name="pin_image_desc">Ilustrasi onboarding</string>
+    <string name="pin_image_desc">Logo Nyachat</string>
     <string name="pin_title">Mulai Pencatatan</string>
     <string name="pin_subtitle">Masuk dengan akun Google-mu, lalu buat atau masukkan PIN untuk memulai workspace keuangan bersama. Data keluarga tersinkron otomatis antar perangkat.</string>
 

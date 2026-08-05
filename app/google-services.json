@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "340343053987-18op35fnkc0hfvhio335kkq4u4mm2ik3.apps.googleusercontent.com",
+          "client_id": "340343053987-kmgki55sjr8dr7nnne5gam8ltvs73vmm.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.startupmini.nyachat",
-            "certificate_hash": "b86555ce770d6b50b0456823645358777e50231f"
+            "certificate_hash": "b59d30b8d8a0be781dd489f673b122c1455903b1"
           }
         },
         {

@@ -1,7 +1,7 @@
 # 💬 Nyachat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-r1.0.1-brightgreen)
+![Versi](https://img.shields.io/badge/versi-r1.0.2-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Nyachat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -14,9 +14,9 @@
 
 | Versi | File | Link |
 |---|---|---|
-| **r1.0.1** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/nyachat/releases/latest)** |
+| **r1.0.2** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/nyachat/releases/latest)** |
 | Semua versi | — | [Daftar Release](https://github.com/ngodingsendiri/nyachat/releases) |
-| Build mentah (artifact) | `Nyachat-r1.0.1-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml) |
+| Build mentah (artifact) | `Nyachat-r1.0.2-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml) |
 
 **Cara install:**
 1. Unduh APK dari link di atas (via HP langsung atau kirim ke HP).
@@ -204,4 +204,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.0.1**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.0.2**

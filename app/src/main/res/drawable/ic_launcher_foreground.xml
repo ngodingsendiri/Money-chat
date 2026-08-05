@@ -2,8 +2,9 @@
 <!--
     Logo Nyachat (dikonversi dari logo.svg):
     bubble chat hijau (gradient) + bubble biru (gradient) dengan
-    simbol & baris pesan putih. Diskalakan 0.6 & di-center supaya
-    muat dalam safe zone adaptive icon (66dp dari 108dp).
+    simbol & baris pesan putih. Diskalakan 0.5 & di-center supaya
+    muat dalam safe zone adaptive icon dengan padding lebih lebar
+    (icon tampil lebih kecil di launcher).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
@@ -13,10 +14,10 @@
     android:viewportHeight="1742.02">
 
     <group
-        android:scaleX="0.6"
-        android:scaleY="0.6"
-        android:translateX="365.3"
-        android:translateY="348.4">
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="456.6"
+        android:translateY="435.5">
 
         <!-- Bubble chat hijau (pesan) -->
         <path

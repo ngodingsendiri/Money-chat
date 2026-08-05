@@ -1,6 +1,6 @@
 # Checklist Rilis ke Google Play (Nyachat)
 
-Checklist langkah demi langkah untuk mengirim **Nyachat** (r1.0.1 / versionCode 21)
+Checklist langkah demi langkah untuk mengirim **Nyachat** (r1.0.2 / versionCode 22)
 ke Google Play Console. Dibuat untuk memastikan tidak ada item yang terlewat.
 
 ---
@@ -20,8 +20,8 @@ ke Google Play Console. Dibuat untuk memastikan tidak ada item yang terlewat.
 
 1. Pastikan semua secret di atas tersedia (khususnya keystore upload).
 2. Buka tab **Actions → Build APK**.
-3. Jalankan build (Workflow dispatch), atau `push` tag `r*` (r1.0.1, ...).
-4. Unduh artifact **`Nyachat-r1.0.1-release-aab`** → file `app-release.aab`.
+3. Jalankan build (Workflow dispatch), atau `push` tag `r*` (r1.0.2, ...).
+4. Unduh artifact **`Nyachat-r1.0.2-release-aab`** → file `app-release.aab`.
    - Artifact debug (`...-debug.apk`) & release APK juga dibuat.
 5. *(Opsional lokal)* `./gradlew :app:bundleRelease` — butuh `KEYSTORE_PATH`/`STORE_PASSWORD`/`KEY_PASSWORD`.
 
@@ -128,7 +128,7 @@ Formulir "Data safety" di Console → **Kebijakan → Data safety & content rati
 1. Console → **Release → Production → Buat rilis baru** → buat release tracks
    (Production, atau Internal Testing untuk uji awal).
 2. Unggah `app-release.aab`.
-3. Catatan rilis: versi `r1.0.1` – `Maintenance rilis: audit & pembersihan repo, hapus data agent lokal, tambalan kecil`.
+3. Catatan rilis: versi `r1.0.2` – `Update google-services.json (OAuth client & SHA-1 baru), launcher icon hitam dengan logo lebih kecil, login pakai logo Nyachat.`
 4. Terbitkan → tunggu review Google (biasanya jam–hari).
 
 ---
