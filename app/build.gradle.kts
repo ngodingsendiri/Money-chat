@@ -5,21 +5,30 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.google.firebase.crashlytics)
 }
 
+// E1: versionName dari git tag (via CI property) atau default.
+// CI bisa set via -Papp.version=X.Y.Z. Local build fallback = 1.0.0.
+// Skema rilis: tag r* (r1.0.0, r1.0.1, ...) — lihat GitHubUpdateChecker.
+private val appVersion: String = project.findProperty("appVersion") as String? ?: "1.0.0"
+
 android {
-  namespace = "com.ngodingsendiri.moneychat"
+  namespace = "com.startupmini.nyachat"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.ngodingsendiri.moneychat"
+    applicationId = "com.startupmini.nyachat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 18
-    versionName = "2.0.0"
+    versionCode = 19
+    versionName = appVersion
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    buildConfigField("String", "OPENROUTER_API_KEY", "\"" + (System.getenv("OPENROUTER_API_KEY") ?: "YOUR_OPENROUTER_API_KEY") + "\"")
+    // CATATAN KEAMANAN: TIDAK ada API key AI yang dikompilasi ke APK (key bisa
+    // diekstrak). Gemini & OpenRouter murni BYOK via Pengaturan → Kunci API.
+    // Dulu ada buildConfigField OPENROUTER_API_KEY yang membakar key produksi ke
+    // APK bila env CI diset — sudah dihapus (P1).
   }
 
   signingConfigs {
@@ -55,13 +64,13 @@ android {
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }
 
-  // Resource Firebase (default_web_client_id dkk.) dibaca lewat getIdentifier()
-  // yang tidak terdeteksi resource shrinker. Tanpa keep, web client ID hilang
-  // dari APK release -> login Google gagal dengan pesan
-  // "Google Sign-In belum dikonfigurasi" walau Google sudah aktif di console.
-  // (Catatan: DSL androidResources.keepSpecificResources tidak tersedia di AGP 9 —
-  //  resource dipertahankan lewat referensi statis R.string.default_web_client_id
-  //  di PinConnectScreen + tools:keep di app/src/main/res/values/keep.xml.)
+  // Resource Firebase (default_web_client_id dkk.) dipertahankan di APK release
+  // lewat tools:keep (app/src/main/res/values/keep.xml) — tanpa itu web client ID
+  // hilang dari APK release -> login Google gagal dengan pesan "Google Sign-In
+  // belum dikonfigurasi" walau Google sudah aktif di console.
+  // (Catatan: DSL androidResources.keepSpecificResources tidak tersedia di AGP 9;
+  //  PinConnectScreen membaca default_web_client_id via getIdentifier() dengan
+  //  fallback null supaya app tetap kompil walau oauth_client kosong di JSON.)
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
@@ -98,9 +107,10 @@ dependencies {
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  implementation(libs.androidx.security.crypto)
+  // implementation(libs.androidx.security.crypto)  // REMOVED: migrasi ke SecureStorage (Android Keystore)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.crashlytics)
   implementation(libs.androidx.credentials)
   implementation(libs.googleid)
   implementation(libs.androidx.credentials.play.services.auth)
@@ -113,6 +123,7 @@ dependencies {
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
+  testImplementation(libs.org.json)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
   testImplementation(libs.roborazzi)

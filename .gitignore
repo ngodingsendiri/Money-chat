@@ -26,3 +26,6 @@ my-upload-key.jks
 *.jks
 keystore_base64.txt
 keystore_creds.txt
+
+# Dependensi npm untuk lint firestore.rules (package-lock.json tetap di-commit)
+node_modules/

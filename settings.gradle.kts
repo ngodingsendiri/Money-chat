@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "MoneyChat"
+rootProject.name = "Nyachat"
 
 include(":app")

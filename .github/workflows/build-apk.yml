@@ -1,8 +1,8 @@
 name: Build APK
 
-# Menghasilkan APK Money Chat dari GitHub.
+# Menghasilkan APK Nyachat dari GitHub.
 # - APK debug (langsung bisa diinstall) selalu dibuat dan diunggah sebagai artifact.
-# - Saat push TAG v* -> otomatis dibuat GitHub Release berisi APK (link download permanen).
+# - Saat push TAG r* (r1.0.0, r1.0.1, ...) -> otomatis dibuat GitHub Release berisi APK (link download permanen).
 # - APK release (ditandatangani) otomatis dibuat kalau secrets keystore disiapkan:
 #     KEYSTORE_BASE64    -> isi file keystore (.jks) dalam base64
 #     KEYSTORE_PASSWORD  -> password keystore (STORE_PASSWORD)
@@ -12,7 +12,7 @@ name: Build APK
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags: ["r*"]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Cache Gradle & dependensi (termasuk artefak Robolectric android-all untuk
+      # test snapshot UI) supaya CI tidak mengunduh ulang setiap kali.
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -41,21 +46,48 @@ jobs:
       # kali — kalau berubah, Google Sign-In Firebase menolak APK
       # ("gagal login"). Jangan ganti/hapus debug.keystore.
 
+      # versionName kini diambil dari property appVersion (default 1.0.0) —
+      # bukan lagi literal di blok defaultConfig. Grep keduanya untuk
+      # kompatibilitas ke depan.
       - name: Read version
         id: version
         run: |
-          VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          VERSION=$(grep -oP 'appVersion: String = project\.findProperty\("appVersion"\) as String\? \?: "\K[^"]+' app/build.gradle.kts | head -1)
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts | head -1)
+          fi
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      # Gate kualitas: unit test & lint dijalankan SEBELUM build. Kalau gagal,
+      # job berhenti dan tidak ada APK/AAB yang dihasilkan.
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug --no-daemon
+
+      # Snapshot UI (Roborazzi, P3-3): bandingkan render komponen inti dengan
+      # baseline di app/src/test/snapshots/ — gagal kalau ada regresi visual.
+      # Rekam ulang baseline dengan `./gradlew :app:recordRoborazziDebug` lalu
+      # commit PNG barunya bersama perubahan UI.
+      - name: Snapshot UI (Roborazzi verify)
+        run: ./gradlew :app:verifyRoborazziDebug --no-daemon
+
+      # Lint Firebase Security Rules (firestore.rules) tanpa emulator — pakai
+      # plugin resmi Firebase (@firebase/eslint-plugin-security-rules). Config
+      # ada di eslint.config.mjs; menolak rules yang membuka read/write publik.
+      - name: Lint Firestore rules
+        run: |
+          npm ci
+          npm run lint:rules
+
       - name: Build debug APK
-        env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: MoneyChat-${{ steps.version.outputs.version }}-debug
+          name: Nyachat-${{ steps.version.outputs.version }}-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -65,7 +97,6 @@ jobs:
           KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::notice::Keystore secrets belum diset — APK release dilewati (APK debug tetap tersedia)."
@@ -77,18 +108,41 @@ jobs:
       - name: Upload release APK (jika ada)
         uses: actions/upload-artifact@v4
         with:
-          name: MoneyChat-${{ steps.version.outputs.version }}-release
+          name: Nyachat-${{ steps.version.outputs.version }}-release
           path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: warn
+
+      # AAB (Android App Bundle) adalah format resmi untuk upload ke Play Store.
+      - name: Build signed release AAB (Play Store, jika secrets keystore diset)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PATH: ${{ runner.temp }}/upload-keystore.jks
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::notice::Keystore secrets belum diset — AAB release dilewati."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          ./gradlew :app:bundleRelease --no-daemon
+
+      - name: Upload release AAB (jika ada)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nyachat-${{ steps.version.outputs.version }}-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: warn
 
       - name: Buat GitHub Release (khusus tag v*)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          name: Money Chat ${{ github.ref_name }}
+          name: Nyachat ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           files: |
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/bundle/release/app-release.aab
           fail_on_unmatched_files: false
           generate_release_notes: true

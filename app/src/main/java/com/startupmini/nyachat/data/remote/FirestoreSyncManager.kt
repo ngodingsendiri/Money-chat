@@ -1,0 +1,631 @@
+package com.startupmini.nyachat.data.remote
+
+import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
+import com.startupmini.nyachat.Constants
+import com.startupmini.nyachat.data.backup.DataExporter
+import com.startupmini.nyachat.data.local.ChatMessage
+import com.startupmini.nyachat.data.local.ChatMessageDao
+import com.startupmini.nyachat.data.local.FinancialTransaction
+import com.startupmini.nyachat.data.local.PendingOp
+import com.startupmini.nyachat.data.local.PendingOpDao
+import com.startupmini.nyachat.data.local.TransactionDao
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
+
+/** Representasi dokumen Firestore (data tanpa id lokal Room). */
+data class CloudMessage(
+    val cloudId: String = "",
+    val sender: String = "",
+    val messageText: String = "",
+    val timestamp: Long = 0L,
+    val isFinancial: Boolean = false,
+    val detectedAmount: Double? = null,
+    val detectedCategory: String? = null,
+    val detectedType: String? = null,
+    val replyToSender: String? = null,
+    val replyToText: String? = null,
+    val editedAt: Long? = null
+)
+
+/** Representasi dokumen Firestore untuk transaksi. */
+data class CloudTransaction(
+    val cloudId: String = "",
+    val type: String = "",
+    val category: String = "",
+    val amount: Double = 0.0,
+    val description: String = "",
+    val loggedBy: String = "",
+    val timestamp: Long = 0L,
+    val chatMessageId: Long? = null
+)
+
+/** Status sinkronisasi nyata untuk indikator UI (P2-16). */
+enum class SyncStatus { SYNCED, SYNCING, OFFLINE, ERROR }
+
+// P5: FamilyMember, JoinRequest, MembershipStatus, JoinRequestResult,
+// OwnerSetupResult & seluruh alur keanggotaan pindah ke MembershipManager.kt.
+
+/**
+ * Sinkronisasi dua arah dengan Firestore:
+ * - Tulis: setiap pesan/transaksi baru (dan hapus/clear) dipush ke cloud.
+ * - Baca: snapshot listener realtime — perubahan dari perangkat lain langsung
+ *   dimerge ke Room lokal (offline-first tetap jalan kalau gak ada internet).
+ * Workspace diidentifikasi oleh PIN keluarga (document id di koleksi "families").
+ */
+object FirestoreSyncManager {
+
+    private const val TAG = "FirestoreSync"
+    private const val COLLECTION_FAMILIES = Constants.Collections.FAMILIES
+    // Konstanta peran memakai MembershipManager.ROLE_* (satu sumber kebenaran — P4.5).
+    /** Jenis operasi antrian pending (retry offline). */
+    const val OP_SYNC_MESSAGE = "SYNC_MESSAGE"
+    const val OP_DELETE_MESSAGE = "DELETE_MESSAGE"
+    const val OP_SYNC_TRANSACTION = "SYNC_TRANSACTION"
+    const val OP_DELETE_TRANSACTION = "DELETE_TRANSACTION"
+    const val OP_CLEAR_FAMILY = "CLEAR_FAMILY"
+    /** Delay awal untuk retry — berlipat dua setiap percobaan (max 32 detik). */
+    private const val MIN_RETRY_DELAY_MS = 1_000L
+    private const val MAX_RETRY_DELAY_MS = 32_000L
+    @Volatile private var familyId: String = ""
+    @Volatile private var role: String = MembershipManager.ROLE_MEMBER
+    @Volatile private var chatDao: ChatMessageDao? = null
+    @Volatile private var transDao: TransactionDao? = null
+    @Volatile private var pendingDao: PendingOpDao? = null
+    @Volatile private var messagesListener: ListenerRegistration? = null
+    @Volatile private var transactionsListener: ListenerRegistration? = null
+    /** Status sinkronisasi yang jujur untuk indikator UI (P2-16). */
+    private val _syncStatus = MutableStateFlow(SyncStatus.SYNCED)
+    val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
+    /** Sinyal "ada op baru di antrian" — drain tidur di sini (bukan polling 2s). */
+    private val opsSignal = Channel<Unit>(Channel.CONFLATED)
+    /** Listener dijeda saat app di background (P2-12) — hemat baterai/kuota. */
+    @Volatile private var paused = false
+    /** Scope tunggal utk retry & merge hasil listener — dibatalkan di stop(). */
+    @Volatile private var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * Cek apakah sudah login dengan akun Google (wajib sebelum sync).
+     * Login Google dilakukan dari UI (PinConnectScreen) via Credential Manager —
+     * di sini kita tidak pernah login anonim lagi.
+     */
+    fun isSignedIn(): Boolean = FirebaseAuth.getInstance().currentUser != null
+
+    /**
+     * Pasang DAO antrian pending sejak awal (dipanggil saat repository dibuat),
+     * supaya operasi yang dikirim SEBELUM start() selesai (familyId masih kosong)
+     * tetap bisa di-antri — tidak hilang.
+     */
+    fun setPendingOpDao(dao: PendingOpDao) {
+        pendingDao = dao
+    }
+
+    /** Aktifkan sinkronisasi untuk workspace PIN tertentu. */
+    fun start(pin: String, role: String = MembershipManager.ROLE_MEMBER, chatMessageDao: ChatMessageDao, transactionDao: TransactionDao, pendingOpDao: PendingOpDao) {
+        stop()
+        paused = false
+        familyId = pin
+        this.role = role
+        chatDao = chatMessageDao
+        transDao = transactionDao
+        pendingDao = pendingOpDao
+        ensureFamilyDoc()
+        listenMessages()
+        listenTransactions()
+        startPendingDrain()
+        // P4-1: PIN adalah password bersama workspace — jangan pernah dicatat
+        // apa adanya ke log (meski Log.d sudah di-strip R8 di build release).
+        Log.d(TAG, "Cloud sync aktif untuk keluarga: ${redactSecret(pin)} (role=$role)")
+    }
+
+    /** Hentikan semua listener + batalkan retry/merge + reset state (saat logout). */
+    fun stop() {
+        paused = false
+        // Listener & state keanggotaan ditangani MembershipManager (P5) — reset
+        // daftar anggota di sana supaya login ke workspace berbeda tidak
+        // menampilkan anggota workspace lama (P4-1).
+        MembershipManager.stop()
+        messagesListener?.remove(); messagesListener = null
+        transactionsListener?.remove(); transactionsListener = null
+        scope.cancel()
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        familyId = ""
+        role = MembershipManager.ROLE_MEMBER
+        chatDao = null
+        transDao = null
+        pendingDao = null
+        // Jangan biarkan status lama (ERROR/OFFLINE) menempel di singleton setelah
+        // logout — kalau tidak, workspace berikutnya sempat menampilkan indikator
+        // sinkronisasi yang salah (P2-16).
+        _syncStatus.value = SyncStatus.SYNCED
+    }
+
+    /**
+     * Jeda listener realtime saat app masuk background (P2-12) — data tetap utuh
+     * di cache lokal; saat resume, listener dipasang ulang & menerima snapshot baru.
+     */
+    fun pauseListeners() {
+        if (paused) return
+        paused = true
+        messagesListener?.remove(); messagesListener = null
+        transactionsListener?.remove(); transactionsListener = null
+    }
+
+    /** Aktifkan kembali listener saat app kembali ke foreground. */
+    fun resumeListeners() {
+        if (!paused) return
+        paused = false
+        if (familyId.isEmpty() || chatDao == null) return
+        listenMessages()
+        listenTransactions()
+    }
+
+    /**
+     * Catat kepemilikan workspace di dokumen keluarga (id = PIN) dan pastikan
+     * member doc diri sendiri ada (bootstrap & migrasi workspace lama).
+     * Hanya PEMILIK (yang membuat PIN) yang menulis ownerId — anggota tidak
+     * pernah menimpa. Fondasi model otorisasi: dokumen mencatat siapa pembuat
+     * workspace, dan keanggotaan di-enforce oleh rules Firestore.
+     */
+    private fun ensureFamilyDoc() {
+        if (role != MembershipManager.ROLE_OWNER) return
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        scope.launch {
+            runCatching {
+                val famRef = db().collection(COLLECTION_FAMILIES).document(familyId)
+                famRef.set(
+                    mapOf(
+                        Constants.Fields.OWNER_ID to uid,
+                        Constants.Fields.CREATED_AT to FieldValue.serverTimestamp()
+                    ),
+                    SetOptions.merge()
+                ).await()
+                ensureSelfMemberDoc(famRef, uid, MembershipManager.ROLE_OWNER)
+            }.onFailure { Log.w(TAG, "Catat ownerId/member gagal: ${it.message}") }
+        }
+    }
+
+    /** Tulis member doc diri sendiri bila belum ada (bootstrap & migrasi workspace lama). */
+    private suspend fun ensureSelfMemberDoc(
+        famRef: com.google.firebase.firestore.DocumentReference,
+        uid: String,
+        role: String
+    ) {
+        val selfRef = famRef.collection("members").document(uid)
+        if (selfRef.get().await().exists()) return
+        val user = FirebaseAuth.getInstance().currentUser
+        selfRef.set(
+            nonNullMap(
+                Constants.Fields.UID to uid,
+                Constants.Fields.EMAIL to user?.email,
+                Constants.Fields.NAME to user?.displayName,
+                Constants.Fields.ROLE to role,
+                Constants.Fields.LABEL to (user?.displayName ?: Constants.Defaults.LABEL),
+                Constants.Fields.ADDED_AT to System.currentTimeMillis()
+            )
+        ).await()
+    }
+
+    /**
+     * Masking nilai rahasia untuk log — tampilkan 2 karakter pertama + terakhir
+     * saja supaya jejak tetap bisa dibedakan tanpa membocorkan nilai penuh.
+     */
+    private fun redactSecret(secret: String): String =
+        if (secret.length <= 4) "****" else secret.take(2) + "••••" + secret.takeLast(2)
+
+    private fun db() = FirebaseFirestore.getInstance()
+
+    private fun messagesRef() =
+        db().collection(Constants.Collections.FAMILIES).document(familyId).collection(Constants.Collections.MESSAGES)
+
+    private fun transactionsRef() =
+        db().collection(Constants.Collections.FAMILIES).document(familyId).collection(Constants.Collections.TRANSACTIONS)
+
+    // ---------- Baca: snapshot listener realtime ----------
+
+    private fun listenMessages(retryDelayMs: Long = MIN_RETRY_DELAY_MS) {
+        messagesListener = messagesRef().addSnapshotListener { snapshot, error ->
+            if (paused) return@addSnapshotListener // app di background
+            if (error != null) {
+                Log.w(TAG, "Listen messages gagal: ${error.message}. Retry dalam ${retryDelayMs / 1000}s...")
+                // Belum jadi anggota → ditolak rules; jangan retry selamanya.
+                if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    Log.w(TAG, "Listen messages: PERMISSION_DENIED (bukan anggota) — berhenti.")
+                    messagesListener?.remove(); messagesListener = null
+                    return@addSnapshotListener
+                }
+                onSyncFailure(error)
+                messagesListener?.remove()
+                messagesListener = null
+                scope.launch {
+                    retryWithBackoff(
+                        label = "messages",
+                        delayMs = retryDelayMs,
+                        action = { listenMessages((retryDelayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS)) }
+                    )
+                }
+                return@addSnapshotListener
+            }
+            snapshot ?: return@addSnapshotListener
+            _syncStatus.value = SyncStatus.SYNCED
+            scope.launch {
+                val dao = chatDao ?: return@launch
+                for (change in snapshot.documentChanges) {
+                    val cloud = change.document.toObject(CloudMessage::class.java)
+                    try {
+                        when (change.type) {
+                            DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED ->
+                                upsertMessage(dao, cloud)
+                            DocumentChange.Type.REMOVED -> dao.deleteByCloudId(cloud.cloudId)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Merge pesan gagal: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun listenTransactions(retryDelayMs: Long = MIN_RETRY_DELAY_MS) {
+        transactionsListener = transactionsRef().addSnapshotListener { snapshot, error ->
+            if (paused) return@addSnapshotListener // app di background
+            if (error != null) {
+                Log.w(TAG, "Listen transactions gagal: ${error.message}. Retry dalam ${retryDelayMs / 1000}s...")
+                if (error.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                    Log.w(TAG, "Listen transactions: PERMISSION_DENIED (bukan anggota) — berhenti.")
+                    transactionsListener?.remove(); transactionsListener = null
+                    return@addSnapshotListener
+                }
+                onSyncFailure(error)
+                transactionsListener?.remove()
+                transactionsListener = null
+                scope.launch {
+                    retryWithBackoff(
+                        label = "transactions",
+                        delayMs = retryDelayMs,
+                        action = { listenTransactions((retryDelayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS)) }
+                    )
+                }
+                return@addSnapshotListener
+            }
+            snapshot ?: return@addSnapshotListener
+            _syncStatus.value = SyncStatus.SYNCED
+            scope.launch {
+                val dao = transDao ?: return@launch
+                for (change in snapshot.documentChanges) {
+                    val cloud = change.document.toObject(CloudTransaction::class.java)
+                    try {
+                        when (change.type) {
+                            DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED ->
+                                upsertTransaction(dao, cloud)
+                            DocumentChange.Type.REMOVED -> dao.deleteByCloudId(cloud.cloudId)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Merge transaksi gagal: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Menunggu dengan exponential backoff sebelum memanggil ulang [action].
+     * Setiap pemanggil meneruskan delayMs yang sudah berlipat dua, sehingga
+     * urutan delay: 1s → 2s → 4s → 8s → 16s → 32s (cap).
+     * Berhenti otomatis jika familyId kosong (listener sudah di-stop via logout).
+     */
+    private suspend fun retryWithBackoff(label: String, delayMs: Long = MIN_RETRY_DELAY_MS, action: () -> Unit) {
+        if (familyId.isEmpty() || paused) return // logout / app di background
+        Log.d(TAG, "[$label] Retry dalam ${delayMs / 1000}s (next: ${(delayMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS) / 1000}s)...")
+        delay(delayMs)
+        if (familyId.isEmpty() || paused) return
+        action()
+    }
+
+    private suspend fun upsertMessage(dao: ChatMessageDao, c: CloudMessage) {
+        val existing = dao.getByCloudId(c.cloudId)
+        val local = if (existing != null) {
+            ChatMessage(
+                id = existing.id,
+                sender = c.sender,
+                messageText = c.messageText,
+                timestamp = c.timestamp,
+                isFinancial = c.isFinancial,
+                detectedAmount = c.detectedAmount,
+                detectedCategory = c.detectedCategory,
+                detectedType = c.detectedType,
+                replyToSender = c.replyToSender,
+                replyToText = c.replyToText,
+                editedAt = c.editedAt,
+                // Lampiran (imagePath/filePath/fileName) TIDAK dikirim ke cloud —
+                // file hanya ada di perangkat yang mengirimnya. Pertahankan path
+                // lokal supaya bubble foto nota/dokumen tidak hilang saat listener
+                // Firestore mem-merge dokumen yang sama (mis. setelah restore).
+                imagePath = existing.imagePath,
+                filePath = existing.filePath,
+                fileName = existing.fileName,
+                cloudId = c.cloudId
+            )
+        } else {
+            ChatMessage(
+                sender = c.sender,
+                messageText = c.messageText,
+                timestamp = c.timestamp,
+                isFinancial = c.isFinancial,
+                detectedAmount = c.detectedAmount,
+                detectedCategory = c.detectedCategory,
+                detectedType = c.detectedType,
+                replyToSender = c.replyToSender,
+                replyToText = c.replyToText,
+                editedAt = c.editedAt,
+                cloudId = c.cloudId
+            )
+        }
+        dao.insertMessage(local)
+    }
+
+    private suspend fun upsertTransaction(dao: TransactionDao, c: CloudTransaction) {
+        val existing = dao.getByCloudId(c.cloudId)
+        val local = if (existing != null) {
+            FinancialTransaction(
+                id = existing.id,
+                type = c.type,
+                category = c.category,
+                amount = c.amount,
+                description = c.description,
+                loggedBy = c.loggedBy,
+                timestamp = c.timestamp,
+                chatMessageId = c.chatMessageId,
+                cloudId = c.cloudId
+            )
+        } else {
+            FinancialTransaction(
+                type = c.type,
+                category = c.category,
+                amount = c.amount,
+                description = c.description,
+                loggedBy = c.loggedBy,
+                timestamp = c.timestamp,
+                chatMessageId = c.chatMessageId,
+                cloudId = c.cloudId
+            )
+        }
+        dao.insertTransaction(local)
+    }
+
+    // ---------- Tulis: push perubahan lokal ke cloud ----------
+
+    /** Guard: jangan push/hapus apapun setelah logout (familyId kosong) atau tak login. */
+    private fun canSync(): Boolean = familyId.isNotEmpty() && isSignedIn()
+
+    // ---------- Tulis: push perubahan lokal ke cloud (dengan antrian retry) ----------
+    //
+    // Semua metode *public* di bawah ini bersifat "queue-aware": mencoba kirim
+    // langsung, dan kalau gagal / workspace belum siap, operasi disimpan sebagai
+    // pending op di Room. Antrian dikuras (drain) oleh startPendingDrain() dengan
+    // exponential backoff selama app hidup, dan diproses lagi saat workspace yang
+    // sama diaktifkan berikutnya — sehingga pesan/transaksi TIDAK hilang walau
+    // app ditutup saat offline.
+
+    suspend fun syncMessage(message: ChatMessage) {
+        val cid = message.cloudId?.takeIf { it.isNotBlank() } ?: return
+        if (canSync() && syncMessageNow(message)) return
+        enqueueOp(OP_SYNC_MESSAGE, DataExporter.messageToJson(message).toString())
+    }
+
+    private suspend fun syncMessageNow(message: ChatMessage): Boolean {
+        val cid = message.cloudId?.takeIf { it.isNotBlank() } ?: return false
+        return try {
+            // Firestore menolak nilai null di dalam map set() — filter dulu.
+            messagesRef().document(cid).set(
+                nonNullMap(
+                    "cloudId" to cid,
+                    "sender" to message.sender,
+                    "messageText" to message.messageText,
+                    "timestamp" to message.timestamp,
+                    "isFinancial" to message.isFinancial,
+                    "detectedAmount" to message.detectedAmount,
+                    "detectedCategory" to message.detectedCategory,
+                    "detectedType" to message.detectedType,
+                    "replyToSender" to message.replyToSender,
+                    "replyToText" to message.replyToText,
+                    "editedAt" to message.editedAt
+                )
+            ).await()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Sync pesan gagal: ${e.message}")
+            onSyncFailure(e)
+            false
+        }
+    }
+
+    suspend fun deleteMessage(cloudId: String) {
+        if (cloudId.isBlank()) return
+        if (canSync() && deleteMessageNow(cloudId)) return
+        enqueueOp(OP_DELETE_MESSAGE, JSONObject().put("cloudId", cloudId).toString())
+    }
+
+    private suspend fun deleteMessageNow(cloudId: String): Boolean = try {
+        messagesRef().document(cloudId).delete().await()
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "Hapus pesan cloud gagal: ${e.message}")
+        onSyncFailure(e)
+        false
+    }
+
+    suspend fun syncTransaction(transaction: FinancialTransaction) {
+        val cid = transaction.cloudId?.takeIf { it.isNotBlank() } ?: return
+        if (canSync() && syncTransactionNow(transaction)) return
+        enqueueOp(OP_SYNC_TRANSACTION, DataExporter.transactionToJson(transaction).toString())
+    }
+
+    private suspend fun syncTransactionNow(transaction: FinancialTransaction): Boolean {
+        val cid = transaction.cloudId?.takeIf { it.isNotBlank() } ?: return false
+        return try {
+            transactionsRef().document(cid).set(
+                nonNullMap(
+                    "cloudId" to cid,
+                    "type" to transaction.type,
+                    "category" to transaction.category,
+                    "amount" to transaction.amount,
+                    "description" to transaction.description,
+                    "loggedBy" to transaction.loggedBy,
+                    "timestamp" to transaction.timestamp,
+                    "chatMessageId" to transaction.chatMessageId
+                )
+            ).await()
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "Sync transaksi gagal: ${e.message}")
+            onSyncFailure(e)
+            false
+        }
+    }
+
+    /** Bangun map Firestore tanpa kunci bernilai null (null membuat set() error). */
+    private fun nonNullMap(vararg pairs: Pair<String, Any?>): Map<String, Any> {
+        val result = linkedMapOf<String, Any>()
+        pairs.forEach { (k, v) -> if (v != null) result[k] = v }
+        return result
+    }
+
+    suspend fun deleteTransaction(cloudId: String) {
+        if (cloudId.isBlank()) return
+        if (canSync() && deleteTransactionNow(cloudId)) return
+        enqueueOp(OP_DELETE_TRANSACTION, JSONObject().put("cloudId", cloudId).toString())
+    }
+
+    private suspend fun deleteTransactionNow(cloudId: String): Boolean = try {
+        transactionsRef().document(cloudId).delete().await()
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "Hapus transaksi cloud gagal: ${e.message}")
+        onSyncFailure(e)
+        false
+    }
+
+    /** Hapus semua data workspace keluarga dari cloud. */
+    suspend fun clearFamilyData() {
+        if (canSync() && clearFamilyDataNow()) return
+        enqueueOp(OP_CLEAR_FAMILY, JSONObject().toString())
+    }
+
+    /**
+     * Hapus seluruh data cloud pakai WriteBatch (P2-9) — jauh lebih cepat & andal
+     * daripada delete satu-per-satu (yang bisa berhenti di tengah & kena rate limit).
+     */
+    private suspend fun clearFamilyDataNow(): Boolean = try {
+        deleteCollectionInBatches(messagesRef())
+        deleteCollectionInBatches(transactionsRef())
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "Bersihkan cloud gagal: ${e.message}")
+        onSyncFailure(e)
+        false
+    }
+
+    /** Hapus semua dokumen sebuah koleksi, per batch maks 400 (batas WriteBatch). */
+    private suspend fun deleteCollectionInBatches(ref: com.google.firebase.firestore.CollectionReference) {
+        ref.get().await().documents.chunked(400).forEach { chunk ->
+            val batch = db().batch()
+            chunk.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+        }
+    }
+
+    // ---------- Antrian pending: simpan & kuras operasi yang gagal ----------
+
+    private suspend fun enqueueOp(opType: String, payload: String) {
+        val opDao = pendingDao ?: return
+        runCatching { opDao.insert(PendingOp(opType = opType, payload = payload)) }
+            .onFailure { Log.w(TAG, "Simpan pending op gagal: ${it.message}") }
+        // Bangunkan drain yang sedang tidur (P2-12: tanpa polling tiap 2 detik).
+        opsSignal.trySend(Unit)
+    }
+
+    /** Status error untuk indikator UI: OFFLINE saat koneksi putus, ERROR lainnya. */
+    private fun onSyncFailure(e: Exception) {
+        val code = (e as? com.google.firebase.firestore.FirebaseFirestoreException)?.code
+        _syncStatus.value = if (code == com.google.firebase.firestore.FirebaseFirestoreException.Code.UNAVAILABLE) {
+            SyncStatus.OFFLINE
+        } else {
+            SyncStatus.ERROR
+        }
+    }
+
+    /** Eksekusi satu op antrian. Return true kalau berhasil (op bisa dihapus). */
+    private suspend fun executeOp(op: PendingOp): Boolean = try {
+        val payload = JSONObject(op.payload)
+        when (op.opType) {
+            OP_SYNC_MESSAGE -> syncMessageNow(DataExporter.messageFromJson(payload))
+            OP_DELETE_MESSAGE -> deleteMessageNow(payload.optString("cloudId"))
+            OP_SYNC_TRANSACTION -> syncTransactionNow(DataExporter.transactionFromJson(payload))
+            OP_DELETE_TRANSACTION -> deleteTransactionNow(payload.optString("cloudId"))
+            OP_CLEAR_FAMILY -> clearFamilyDataNow()
+            else -> true // tipe tak dikenal → buang agar tidak macet
+        }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e // jangan telan pembatalan coroutine (logout/stop) sebagai kegagalan op
+    } catch (e: Exception) {
+        Log.w(TAG, "Eksekusi pending op gagal: ${e.message}")
+        false
+    }
+
+    /**
+     * Kuras antrian pending selama workspace aktif. Backoff eksponensial saat ada
+     * op gagal (1s → 2s → ... → 32s). Saat antrian kosong, drain TIDAK polling —
+     * ia tidur di [opsSignal] sampai ada op baru (atau scope dibatalkan saat logout).
+     * Berhenti otomatis saat logout (familyId kosong).
+     */
+    private fun startPendingDrain() {
+        scope.launch {
+            var backoffMs = MIN_RETRY_DELAY_MS
+            while (familyId.isNotEmpty()) {
+                val opDao = pendingDao ?: return@launch
+                val ops = opDao.getAll()
+                if (ops.isEmpty()) {
+                    backoffMs = MIN_RETRY_DELAY_MS
+                    _syncStatus.value = SyncStatus.SYNCED
+                    opsSignal.receive()
+                    continue
+                }
+                _syncStatus.value = SyncStatus.SYNCING
+                var failed = false
+                for (op in ops) {
+                    if (familyId.isEmpty()) return@launch
+                    if (executeOp(op)) {
+                        opDao.deleteById(op.id)
+                    } else {
+                        failed = true
+                        break
+                    }
+                }
+                if (failed) {
+                    delay(backoffMs)
+                    backoffMs = (backoffMs * 2).coerceAtMost(MAX_RETRY_DELAY_MS)
+                } else {
+                    backoffMs = MIN_RETRY_DELAY_MS
+                }
+            }
+        }
+    }
+
+}

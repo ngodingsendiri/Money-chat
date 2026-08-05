@@ -1,33 +1,41 @@
 {
   "project_info": {
-    "project_number": "661773606228",
-    "project_id": "chat-keuangan",
-    "storage_bucket": "chat-keuangan.firebasestorage.app"
+    "project_number": "340343053987",
+    "project_id": "nyachat-in",
+    "storage_bucket": "nyachat-in.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:661773606228:android:96727e0ea273945dc97cc1",
+        "mobilesdk_app_id": "1:340343053987:android:971ac5421ae0e6222d2916",
         "android_client_info": {
-          "package_name": "com.ngodingsendiri.moneychat"
+          "package_name": "com.startupmini.nyachat"
         }
       },
       "oauth_client": [
         {
-          "client_id": "661773606228-jq5eiscugdi4j9qg35p9rop2l41kr6fu.apps.googleusercontent.com",
+          "client_id": "340343053987-18op35fnkc0hfvhio335kkq4u4mm2ik3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.startupmini.nyachat",
+            "certificate_hash": "b86555ce770d6b50b0456823645358777e50231f"
+          }
+        },
+        {
+          "client_id": "340343053987-aaghvab3os79l1sthm273rooo3rchp2c.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyCEI03bxFMZopilNDIurhS4t2iZ-j9wWNY"
+          "current_key": "AIzaSyDAE6PJ7H-IRVSoONskGv3kJVx_rkrkbNk"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "661773606228-jq5eiscugdi4j9qg35p9rop2l41kr6fu.apps.googleusercontent.com",
+              "client_id": "340343053987-aaghvab3os79l1sthm273rooo3rchp2c.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

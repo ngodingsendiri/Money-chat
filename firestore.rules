@@ -1,12 +1,84 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Workspace keluarga diakses lewat PIN (familyId = PIN).
-    // WAJIB login dengan akun Google — anonymous/credential lain ditolak.
-    // Setiap anggota punya identitas akun Google-nya masing-masing di dalam workspace.
-    match /families/{familyId} {
-      allow read, write: if request.auth != null
+    // Akses hanya untuk akun yang login dengan Google (bukan anonim/email lain).
+    // PIN keluarga dianggap "secret bersama" — hanya anggota keluarga yang tahu PIN.
+    function signedInGoogle() {
+      return request.auth != null
         && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    // Data keanggotaan diri sendiri (members/uid). Digunakan oleh semua rules
+    // untuk mengecek "apakah pengguna sudah jadi anggota/owner".
+    function memberDoc(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+    }
+    function isMember(familyId) {
+      return memberDoc(familyId).exists;
+    }
+    function isOwner(familyId) {
+      let m = memberDoc(familyId);
+      return m.exists && m.data.role == 'owner';
+    }
+
+    // Dokumen workspace keluarga (document id = PIN). Hanya berisi ownerId +
+    // createdAt. PENTING (perbaikan keamanan FASE P1):
+    //   - READ dibatasi untuk anggota/pemilik saja — sebelumnya ownerId bocor ke
+    //     SEMUA akun Google yang login dan dokumen ini menjadi oracle enumerasi PIN.
+    //   - Non-anggota yang mengecek keberadaan PIN TIDAK membaca dokumen ini;
+    //     mereka mengirim joinRequest, dan rules menolak create bila keluarga
+    //     tidak ada (exists() dievaluasi server-side tanpa butuh hak baca pemohon).
+    //     Trade-off: keberadaan PIN tetap bisa diketahui lewat hasil joinRequest,
+    //     tapi TANPA membocorkan identitas pemilik.
+    //   - CREATE hanya boleh oleh pemohon yang menulis ownerId-nya sendiri
+    //     (mencegah merebut/menimpa dokumen keluarga orang lain). Trade-off yang
+    //     disengaja: pengguna Google yang login bisa "mendaftarkan" PIN (squatting)
+    //     sebelum pemilik asli membuatnya. Risikonya kecil karena PIN 8 digit
+    //     di-generate app tepat sebelum dibagikan, jadi jendela squatt-nya sempit.
+    match /families/{familyId} {
+      allow read: if signedInGoogle() && (isMember(familyId) || isOwner(familyId));
+      allow create: if signedInGoogle()
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if signedInGoogle() && isOwner(familyId);
+    }
+
+    // Daftar anggota. Bisa dibaca oleh sesama anggota (atau diri sendiri saat
+    // masih menunggu persetujuan). Hanya owner yang menambah/mengubah/menghapus,
+    // kecuali pembuat workspace (ownerId di dokumen keluarga) boleh menciptakan
+    // dokumen member-nya sendiri (bootstrap & migrasi workspace lama).
+    match /families/{familyId}/members/{uid} {
+      allow read: if signedInGoogle() && (isMember(familyId) || request.auth.uid == uid);
+      allow create: if signedInGoogle()
+        && (isOwner(familyId)
+            || (request.auth.uid == uid
+                && get(/databases/$(database)/documents/families/$(familyId)).data.ownerId == request.auth.uid));
+      allow update, delete: if signedInGoogle() && isOwner(familyId);
+    }
+
+    // Permintaan bergabung: pemohon boleh membuat/mengubah/mencabut permintaan
+    // miliknya sendiri; owner boleh melihat semua & menindaklanjuti (setujui/tolak),
+    // termasuk menghapus permintaan. Guard tambahan:
+    //   - create/update hanya jika keluarga benar-benar ADA (exists()),
+    //   - dan (kecuali owner) pemohon BELUM menjadi anggota — mencegah request
+    //     ulang berulang / duplikasi.
+    match /families/{familyId}/joinRequests/{uid} {
+      allow create, update: if signedInGoogle()
+        && (request.auth.uid == uid || isOwner(familyId))
+        && exists(/databases/$(database)/documents/families/$(familyId))
+        && (isOwner(familyId)
+            || !get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).exists);
+      allow delete: if signedInGoogle() && (request.auth.uid == uid || isOwner(familyId));
+      allow read: if signedInGoogle() && (request.auth.uid == uid || isOwner(familyId));
+    }
+
+    // PENTING: rules Firestore TIDAK menurun ke subkoleksi.
+    // Subkoleksi messages & transactions WAJIB di-match eksplisit.
+    // Hanya ANGGOTA (yang sudah disetujui owner) yang bisa baca/tulis.
+    match /families/{familyId}/messages/{docId} {
+      allow read, write: if signedInGoogle() && isMember(familyId);
+    }
+    match /families/{familyId}/transactions/{docId} {
+      allow read, write: if signedInGoogle() && isMember(familyId);
     }
   }
 }

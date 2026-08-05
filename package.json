@@ -1,0 +1,13 @@
+{
+  "name": "nyachat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tooling lint untuk file Firebase Security Rules (firestore.rules) — tanpa emulator/project.",
+  "scripts": {
+    "lint:rules": "eslint firestore.rules"
+  },
+  "devDependencies": {
+    "@firebase/eslint-plugin-security-rules": "0.0.2",
+    "eslint": "10.8.0"
+  }
+}
