@@ -25,13 +25,7 @@ concurrency:
 
 jobs:
   build-apk:
-    # WAJIB windows-latest: snapshot UI Roborazzi (golden file PNG) di-rekam di
-    # mesin Windows. Rendering font Robolectric berbeda antar-OS, sehingga verify
-    # gagal di ubuntu ("snapshot tidak cocok") walau kode tidak berubah.
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
