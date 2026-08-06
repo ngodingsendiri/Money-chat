@@ -83,6 +83,20 @@ object MembershipManager {
     private val _joinRequests = MutableStateFlow<List<JoinRequest>>(emptyList())
     val joinRequests: StateFlow<List<JoinRequest>> = _joinRequests.asStateFlow()
 
+    /**
+     * Detail kegagalan terakhir (alur PIN & keanggotaan). Disimpan supaya layar
+     * gate bisa menampilkan PENYEBAB asli kegagalan — bukan hanya "gagal terhubung
+     * ke server" yang menyesatkan (semua non-kasus-khusus tadi direduksi ke pesan
+     * itu). Dipakai untuk diagnosa cepat di perangkat tanpa butuh Logcat.
+     */
+    private val _lastFailure = MutableStateFlow<MembershipFailure?>(null)
+    val lastFailure: StateFlow<MembershipFailure?> = _lastFailure.asStateFlow()
+
+    /** Ringkasan kegagalan untuk ditampilkan ke user. */
+    data class MembershipFailure(val code: String, val message: String) {
+        val summary: String get() = "$code: $message".ifBlank { code }
+    }
+
     @Volatile private var membersListener: ListenerRegistration? = null
     @Volatile private var joinRequestsListener: ListenerRegistration? = null
 
@@ -138,7 +152,7 @@ object MembershipManager {
         }
     }
 
-    /** Hentikan listener & reset state (dipanggil juga dari FirestoreSyncManager.stop). */
+/** Hentikan listener & reset state (dipanggil juga dari FirestoreSyncManager.stop). */
     fun stop() {
         membersListener?.remove(); membersListener = null
         joinRequestsListener?.remove(); joinRequestsListener = null
@@ -146,6 +160,7 @@ object MembershipManager {
         // berbeda berikutnya harus menampilkan anggota baru, bukan yang lama.
         _members.value = emptyList()
         _joinRequests.value = emptyList()
+        _lastFailure.value = null
     }
 
     /** Bangun map Firestore tanpa kunci bernilai null (null membuat set() error). */
@@ -153,6 +168,16 @@ object MembershipManager {
         val result = linkedMapOf<String, Any>()
         pairs.forEach { (k, v) -> if (v != null) result[k] = v }
         return result
+    }
+
+    /** Simpan detail kegagalan Firestore agar layar gate bisa menampilkan penyebab asli. */
+    private fun recordFailure(e: Throwable) {
+        val msg = if (e is com.google.firebase.firestore.FirebaseFirestoreException) {
+            MembershipFailure(e.code?.name ?: "UNKNOWN", e.message ?: "")
+        } else {
+            MembershipFailure("UNKNOWN", e.message ?: e.javaClass.simpleName)
+        }
+        _lastFailure.value = msg
     }
 
     /** Tulis member doc diri sendiri bila belum ada (bootstrap & migrasi workspace lama). */
@@ -190,6 +215,7 @@ object MembershipManager {
      */
     suspend fun ensureOwnerWorkspace(pin: String): OwnerSetupResult {
         val uid = currentUid() ?: return OwnerSetupResult.FAILED
+        _lastFailure.value = null
         val famRef = db().collection(Constants.Collections.FAMILIES).document(pin)
         return runCatching {
             var ownedByMe = false
@@ -243,6 +269,7 @@ object MembershipManager {
      */
     suspend fun checkMembership(pin: String): MembershipStatus {
         val uid = currentUid() ?: return MembershipStatus.FAILED
+        _lastFailure.value = null
         val famRef = db().collection(Constants.Collections.FAMILIES).document(pin)
         return runCatching {
             // Dokumen member & joinRequest milik sendiri selalu boleh dibaca oleh
@@ -252,7 +279,10 @@ object MembershipManager {
             if (famRef.collection(Constants.Collections.JOIN_REQUESTS).document(uid).get().await().exists())
                 return MembershipStatus.PENDING
             MembershipStatus.NOT_REQUESTED
-        }.onFailure { Log.w(TAG, "checkMembership gagal: ${it.message}") }
+        }.onFailure {
+            Log.w(TAG, "checkMembership gagal: ${it.message}")
+            recordFailure(it)
+        }
             .getOrDefault(MembershipStatus.FAILED)
     }
 
@@ -264,6 +294,7 @@ object MembershipManager {
      */
     suspend fun requestJoin(pin: String): JoinRequestResult {
         val uid = currentUid() ?: return JoinRequestResult.FAILED
+        _lastFailure.value = null
         val user = FirebaseAuth.getInstance().currentUser
         return try {
             db().collection(Constants.Collections.FAMILIES).document(pin)
@@ -279,6 +310,7 @@ object MembershipManager {
             JoinRequestResult.SUCCESS
         } catch (e: com.google.firebase.firestore.FirebaseFirestoreException) {
             Log.w(TAG, "requestJoin gagal: ${e.code}: ${e.message}")
+            recordFailure(e)
             if (e.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED) {
                 JoinRequestResult.NOT_FOUND
             } else {
@@ -286,6 +318,7 @@ object MembershipManager {
             }
         } catch (e: Exception) {
             Log.w(TAG, "requestJoin gagal: ${e.message}")
+            recordFailure(e)
             JoinRequestResult.FAILED
         }
     }
@@ -304,6 +337,7 @@ object MembershipManager {
         val deferred = CompletableDeferred<MembershipStatus>()
         val listener = requestRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
+                recordFailure(error)
                 deferred.complete(MembershipStatus.FAILED)
                 return@addSnapshotListener
             }

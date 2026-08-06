@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -46,6 +47,7 @@ import com.startupmini.nyachat.data.remote.JoinRequestResult
 import com.startupmini.nyachat.data.remote.MembershipManager
 import com.startupmini.nyachat.data.remote.MembershipStatus
 import com.startupmini.nyachat.data.remote.OwnerSetupResult
+import androidx.compose.runtime.collectAsState
 import kotlinx.coroutines.delay
 
 private enum class GateState { CHECKING, WAITING, ERROR }
@@ -260,6 +262,23 @@ fun MembershipGateScreen(
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.error
                     )
+                    // Tampilkan penyebab asli kegagalan (mis. kode Firestore) supaya
+                    // bukan sekadar "gagal terhubung" yang menyesatkan — memudahkan
+                    // diagnosa di perangkat.
+                    if (error == GateError.FAILED) {
+                        val lastFailure by MembershipManager.lastFailure.collectAsState()
+                        val detail = lastFailure
+                        if (detail != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = detail.summary,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
             }
 
@@ -274,8 +293,8 @@ fun MembershipGateScreen(
                         attempt++
                     },
                     modifier = Modifier
-                        .fillMaxSize(0.6f)
-                        .height(52.dp)
+                        .fillMaxWidth(0.72f)
+                        .height(48.dp)
                 ) {
                     Text(
                         text = stringResource(R.string.membership_retry),
@@ -285,14 +304,16 @@ fun MembershipGateScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-            OutlinedButton(
-                onClick = onCancel,
-                modifier = Modifier.fillMaxSize(0.6f).height(48.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.action_cancel),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (state != GateState.CHECKING) {
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(0.72f).height(48.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.action_cancel),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
