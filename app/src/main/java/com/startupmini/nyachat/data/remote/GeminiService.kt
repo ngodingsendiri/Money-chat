@@ -645,7 +645,17 @@ object GeminiService {
     }
 
     private fun toRupiah(numStr: String, unit: String?): Double? {
-        val rawNum = numStr.replace(",", ".").toDoubleOrNull() ?: return null
+        // Normalisasi: hapus SEMUA titik ribuan, koma jadi desimal kalau valid
+        val normalized = numStr
+            .replace(".", "")                    // hapus semua titik ribuan
+            .replace(",", ".")                   // koma jadi desimal
+            .let { s ->
+                // Jika ada lebih dari 1 titik setelah replace koma, itu berarti input seperti
+                // "1,500.00" (US format) → jadi "1.500.00" → valid
+                // Kalau input "1.500,00" (EU) → jadi "1500.00" → valid
+                s
+            }
+        val rawNum = normalized.toDoubleOrNull() ?: return null
         return when (unit) {
             "rb", "ribu", "k" -> rawNum * 1000
             "jt", "juta" -> rawNum * 1000000
