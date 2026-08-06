@@ -99,6 +99,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.invisibleToUser
@@ -1255,7 +1256,11 @@ if (showPinDialog) {
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)) {
                         NavigationBarItem(
                             selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
+                            onClick = {
+                                val keyboardController = LocalSoftwareKeyboardController.current
+                                keyboardController?.hide()
+                                selectedTab = 0
+                            },
                             icon = {
                                 Icon(
                                     imageVector = if (selectedTab == 0) Icons.Rounded.ChatBubble else Icons.Rounded.ChatBubbleOutline,
@@ -1266,9 +1271,13 @@ if (showPinDialog) {
                             modifier = Modifier.testTag("tab_chat")
                         )
 
-                        NavigationBarItem(
+                    NavigationBarItem(
                             selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
+                            onClick = {
+                                val keyboardController = LocalSoftwareKeyboardController.current
+                                keyboardController?.hide()
+                                selectedTab = 1
+                            },
                             icon = {
                                 Icon(
                                     imageVector = Icons.Rounded.PieChart,

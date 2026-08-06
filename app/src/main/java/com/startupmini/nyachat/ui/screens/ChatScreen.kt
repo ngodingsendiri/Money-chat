@@ -650,16 +650,20 @@ fun ChatScreen(
                         placeholder = {
                             Text(stringResource(R.string.chat_input_placeholder))
                         },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { sendMessage() }),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { sendMessage() }),
                         modifier = Modifier
                             .weight(1f)
-                            .testTag("chat_input_field"),
+                            .testTag("chat_input_field")
+                            .onFocusChange { hasFocus: Boolean ->
+                                if (!hasFocus) {
+                                    // Keyboard dismissed, focus cleared
+                                }
+                            },
                         shape = RoundedCornerShape(24.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
-                            // Container transparan — latar pill sudah dari container bar.
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent
                         ),
@@ -682,7 +686,7 @@ fun ChatScreen(
                                     tint = askAiTint
                                 )
                             }
-                        }
+                        )
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -886,9 +890,18 @@ fun ChatScreen(
                             onValueChange = { if (it.length <= MAX_MESSAGE_LENGTH) editText = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .focusRequester(editFocusRequester),
-                            maxLines = 5
-                        )
+                                .focusRequester(editFocusRequester)
+                                .onFocusChange { hasFocus: Boolean ->
+                                    if (!hasFocus) {
+                                        // Keyboard dismissed
+                                    }
+                                },
+                            maxLines = 5,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                onEditMessage(msg.id, editText)
+                                editingMessage = null
+                            })
                     }
                 },
                 confirmButton = {
