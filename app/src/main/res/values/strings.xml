@@ -106,17 +106,15 @@
 
     <!-- PIN / onboarding -->
     <string name="pin_image_desc">Logo Nyachat</string>
-    <string name="pin_title">Mulai Pencatatan</string>
-    <string name="pin_subtitle">Masuk dengan akun Google-mu, lalu buat atau masukkan PIN untuk memulai workspace keuangan bersama. Data keluarga tersinkron otomatis antar perangkat.</string>
+    <string name="pin_title">Nyachat</string>
+    <string name="pin_subtitle">Nyatat keuangan cukup dengan Chat</string>
 
     <!-- Google Sign-In -->
     <string name="google_sign_in">Masuk dengan Google</string>
     <string name="google_signing_in">Menghubungkan…</string>
     <string name="google_sign_out">Ganti Akun</string>
     <string name="google_sign_out_desc">Keluar dari akun Google</string>
-    <string name="google_required_hint">Setiap anggota masuk dengan akun Google-nya masing-masing, lalu dipersatukan dalam satu workspace keluarga lewat PIN. Data tersimpan aman di cloud Firebase per workspace.</string>
     <string name="google_signed_in_as">Masuk sebagai %1$s</string>
-    <string name="google_connected_hint">Terhubung &amp; siap dipakai</string>
     <string name="google_sign_in_failed">Gagal masuk dengan Google. Coba lagi.</string>
     <string name="google_err_provider_not_enabled">Google Sign-In belum diaktifkan di project Firebase-mu. Buka Firebase Console → Authentication → Sign-in method → Google → Aktifkan, lalu coba lagi. (auth/operation-not-allowed)</string>
     <string name="google_err_invalid_credential">Kredensial Google tidak valid. Biasanya karena SHA-1 kunci penandatangan APK ini belum terdaftar di Firebase Console → Pengaturan project → Aplikasi Anda → Tambahkan sidik jari SHA-1 (lihat README → \'Setup Google Sign-In\'). (auth/invalid-credential)</string>
@@ -205,7 +203,9 @@
     <!-- Update otomatis dari GitHub Release -->
     <string name="update_available_title">Update Tersedia 🚀</string>
     <string name="update_available_message">Versi baru %1$s sudah dirilis. Download &amp; install sekarang?</string>
+    <string name="update_available_message_release">Versi baru %1$s sudah dirilis. Ketuk tombol berikut untuk membuka halaman rilis, lalu unduh &amp; pasang APK-nya.</string>
     <string name="update_action">Update Sekarang</string>
+    <string name="update_action_release">Lihat Halaman Rilis</string>
     <string name="update_later">Nanti</string>
     <string name="update_downloading">Mengunduh update…</string>
     <string name="update_download_failed">Gagal mengunduh update. Coba lagi nanti.</string>

@@ -977,20 +977,24 @@ class MainActivity : ComponentActivity() {
                                 Text(
                                     text = if (isDownloadingUpdate) {
                                         stringResource(R.string.update_downloading)
-                                    } else {
+                                    } else if (BuildConfig.DEBUG) {
                                         stringResource(R.string.update_available_message, release.versionName)
+                                    } else {
+                                        stringResource(R.string.update_available_message_release, release.versionName)
                                     }
                                 )
                             },
                             confirmButton = {
-                                // Unduh & pasang APK hanya dibolehkan di build DEBUG
-                                // (permission REQUEST_INSTALL_PACKAGES hanya ada di debug).
-                                // Release memakai update Play Store resmi.
-                                if (BuildConfig.DEBUG) {
-                                    TextButton(
-                                        enabled = !isDownloadingUpdate,
-                                        onClick = {
-                                            scope.launch {
+                                // Aksi selalu tersedia di SEMUA build. Debug → unduh &
+                                // pasang langsung (permission REQUEST_INSTALL_PACKAGES). 
+                                // Release → buka halaman release GitHub di browser (ganti
+                                // APK terpasang lebih aman lewat Play Store, tapi tau
+                                // dulu ke halaman rilis agar tetap ada tombol aksi).
+                                TextButton(
+                                    enabled = !isDownloadingUpdate,
+                                    onClick = {
+                                        scope.launch {
+                                            if (BuildConfig.DEBUG) {
                                                 isDownloadingUpdate = true
                                                 try {
                                                     val url = release.apkUrl
@@ -1004,11 +1008,18 @@ class MainActivity : ComponentActivity() {
                                                     isDownloadingUpdate = false
                                                     updateInfo = null
                                                 }
+                                            } else {
+                                                val intent = android.content.Intent(
+                                                    android.content.Intent.ACTION_VIEW,
+                                                    android.net.Uri.parse(release.releaseUrl)
+                                                )
+                                                context.startActivity(intent)
+                                                updateInfo = null
                                             }
                                         }
-                                    ) {
-                                        Text(stringResource(R.string.update_action))
                                     }
+                                ) {
+                                    Text(stringResource(if (BuildConfig.DEBUG) R.string.update_action else R.string.update_action_release))
                                 }
                             },
                             dismissButton = {
@@ -1197,16 +1208,15 @@ class MainActivity : ComponentActivity() {
                     )
                         }
 
-                // NavigationBar — anak terakhir Column induk (di bawah konten Box).
-                // F1 audit focus order: urutan komposisi TopAppBar → konten →
-                // NavigationBar tetap terjaga, dan layout kini pasti di bawah layar
-                // (sebagai sibling akar Compose ia ditempatkan overlap di tepi atas
-                // window). M3 NavigationBar menangani insets navbar bawah sendiri.
-                // Sembunyikan saat keyboard (IME) terbuka supaya konten memakai area
-                // bawah penuh.
+                // NavigationBar — anak terakhir Column induk. Hanya tampil saat
+                // berada di alur app utama (sudah login & punya workspace). Di layar
+                // login/PIN/gate keanggotaan navbar disembunyikan supaya onboarding
+                // tetap fokus & tidak terlihat "menu chat/rekap bocor" sebelum masuk.
+                val isInMainApp = secretsLoaded &&
+                    workspacePin != null && userName != null && firebaseReady && connectGate == null
                 val imeVisible = WindowInsets.isImeVisible
                 AnimatedVisibility(
-                    visible = !imeVisible,
+                    visible = isInMainApp && !imeVisible,
                     enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(220)) + fadeIn(animationSpec = tween(220)),
                     exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(220)) + fadeOut(animationSpec = tween(220))
                 ) {

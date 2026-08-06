@@ -97,9 +97,14 @@ fun PinConnectScreen(
     // dipertahankan di APK release via tools:keep (app/src/main/res/values/keep.xml).
     val webClientId = remember {
         runCatching {
-            val res = context.resources
-            val id = res.getIdentifier("default_web_client_id", "string", context.packageName)
-            if (id != 0) res.getString(id) else null
+            // Referensi STATIS via R.string: jeda resource shrinker bahwa resource ini
+            // dipakai, sehingga default_web_client_id TIDAK dibuang dari APK release.
+            // (Sebelumnya dibaca via context.getIdentifier() yang bukan referensi
+            // kompil-dilihat shrinker → resource hilang di release → login Google
+            // gagal dng "Google Sign-In belum dikonfigurasi" walau Firebase sudah
+            // aktif & SHA-1 sudah didaftarkan. getString pakai resource yang TIDAK
+            // mungkin kosong karena plugin google-services selalu men-generate-nya.)
+            context.getString(R.string.default_web_client_id)
         }.getOrNull()
     }
 
@@ -553,15 +558,6 @@ private fun GoogleSignInCard(
                 modifier = Modifier.padding(top = 12.dp)
             )
         }
-
-        Text(
-            text = stringResource(R.string.google_required_hint),
-            fontSize = 12.5.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp,
-            modifier = Modifier.padding(top = 14.dp)
-        )
     }
 }
 
@@ -607,11 +603,6 @@ private fun AccountChip(
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Text(
-                text = stringResource(R.string.google_connected_hint),
-                fontSize = 11.5.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         TextButton(onClick = onSignOut) {
