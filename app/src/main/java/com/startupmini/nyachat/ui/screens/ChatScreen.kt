@@ -610,16 +610,21 @@ fun ChatScreen(
                 )
             }
 
-            // Chat Input Box — Telegram-style: Plus | TextField (auto-expand) | Send
+            // Chat Input Box — Telegram-style floating pill (audit #8): bukan kotak
+            // menempel penuh. Margin tepi + sudut membulat + latar surfaceVariant membuat
+            // kolom input "mengambang" di atas daftar pesan (WhatsApp/Telegram style).
             Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
+                color = Color.Transparent,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(28.dp))
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.85f else 0.6f)
+                        )
                         .animateContentSize(),
                     verticalAlignment = Alignment.Bottom
                 ) {
@@ -654,8 +659,9 @@ fun ChatScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f)
+                            // Container transparan — latar pill sudah dari container bar.
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent
                         ),
                         maxLines = 6,
                         minLines = 1,
@@ -1032,22 +1038,25 @@ fun ChatMessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 4.dp, start = 4.dp, end = 4.dp)
             ) {
-                // Avatar inisial pengirim — dekoratif (nama pengirim sudah ada di
-                // sampingnya); disembunyikan dari pembaca layar supaya TalkBack tidak
-                // membacakan huruf tunggal yang membingungkan (P3-2).
+                // Avatar pengirim — foto profil bila ada, else lingkaran inisial
+                // (audit #2). Ditandai dekoratif untuk TalkBack: nama sudah tertera.
+                val context = LocalContext.current
+                val bubblePhotoPath = remember(message.sender) {
+                    com.startupmini.nyachat.data.local.AvatarStore.getAvatarPath(context, message.sender)
+                }
                 Box(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .background(senderColor.copy(alpha = 0.16f))
-                        .clearAndSetSemantics {},
-                    contentAlignment = Alignment.Center
+                        .clearAndSetSemantics { }
                 ) {
-                    Text(
-                        text = senderLabel.take(1).uppercase(Locale.ROOT),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = senderColor
+                    com.startupmini.nyachat.ui.util.AvatarImage(
+                        name = senderLabel,
+                        size = 24,
+                        photoPath = bubblePhotoPath,
+                        backgroundColor = senderColor.copy(alpha = 0.16f),
+                        textColor = senderColor,
+                        textStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))

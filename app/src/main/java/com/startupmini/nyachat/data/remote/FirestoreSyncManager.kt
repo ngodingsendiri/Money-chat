@@ -20,10 +20,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -94,6 +98,14 @@ object FirestoreSyncManager {
     /** Status sinkronisasi yang jujur untuk indikator UI (P2-16). */
     private val _syncStatus = MutableStateFlow(SyncStatus.SYNCED)
     val syncStatus: StateFlow<SyncStatus> = _syncStatus.asStateFlow()
+    /** Event sekali-jalan saat koneksi pulih (OFFLINE/ERROR → SYNCED) — UI
+     *  menampilkan Snackbar singkat supaya user tahu status merah/kuning sudah
+     *  selesai dan data kembali sinkron (audit #6). */
+    private val _recoveryEvents = MutableSharedFlow<String>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val recoveryEvents: SharedFlow<String> = _recoveryEvents.asSharedFlow()
     /** Sinyal "ada op baru di antrian" — drain tidur di sini (bukan polling 2s). */
     private val opsSignal = Channel<Unit>(Channel.CONFLATED)
     /** Listener dijeda saat app di background (P2-12) — hemat baterai/kuota. */
@@ -264,7 +276,7 @@ object FirestoreSyncManager {
                 return@addSnapshotListener
             }
             snapshot ?: return@addSnapshotListener
-            _syncStatus.value = SyncStatus.SYNCED
+            markSynced()
             scope.launch {
                 val dao = chatDao ?: return@launch
                 for (change in snapshot.documentChanges) {
@@ -306,7 +318,7 @@ object FirestoreSyncManager {
                 return@addSnapshotListener
             }
             snapshot ?: return@addSnapshotListener
-            _syncStatus.value = SyncStatus.SYNCED
+            markSynced()
             scope.launch {
                 val dao = transDao ?: return@launch
                 for (change in snapshot.documentChanges) {
@@ -651,6 +663,15 @@ object FirestoreSyncManager {
         } else {
             SyncStatus.ERROR
         }
+    }
+
+    /** Set status SYNCED + emit event pemulihan bila sebelumnya error/offline
+     *  (audit #6: indikator jujur + pemberitahuan saat koneksi pulih). */
+    private fun markSynced() {
+        if (_syncStatus.value != SyncStatus.SYNCED) {
+            _recoveryEvents.tryEmit("Sinkron tersambung kembali.")
+        }
+        _syncStatus.value = SyncStatus.SYNCED
     }
 
     /** Eksekusi satu op antrian. Return true kalau berhasil (op bisa dihapus). */

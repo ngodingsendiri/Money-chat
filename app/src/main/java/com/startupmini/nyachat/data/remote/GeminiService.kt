@@ -185,6 +185,11 @@ object GeminiService {
         val apiKey = getApiKey()
         val balance = totalIncome - totalExpense
 
+        // Audit #7: insight terpersonalisasi dari data nyata — dipakai di prompt
+        // AI DAN di fallback offline, supaya rekomendasi menyebut pos/angka milik user.
+        val insights = com.startupmini.nyachat.data.analytics.FinancialInsightsEngine.compute(transactions)
+        val insightLines = com.startupmini.nyachat.data.analytics.FinancialInsightsEngine.describeForPrompt(insights)
+
         val transSummary = transactions.take(20).joinToString("\n") {
             "- [${it.type}] ${it.category}: Rp ${it.amount.toLong()} (${it.description}) oleh ${it.loggedBy}"
         }
@@ -197,10 +202,16 @@ object GeminiService {
             Total Pengeluaran: Rp ${totalExpense.toLong()}
             Sisa Saldo: Rp ${balance.toLong()}
             
+            Insight yang sudah dihitung dari data mereka:
+            $insightLines
+            
             Daftar Transaksi Terakhir:
             $transSummary
             
             Berikan evaluasi kesehatan keuangan ini dalam Bahasa Indonesia yang profesional, obyektif, dan solutif.
+            JANGAN menjawab generik — rujuk POSITIF KONKRET di atas: sebut kategori terbesar,
+            pengeluaran tunggal terbesar, pengguna yang paling banyak membelanjakan, dan arah
+            tren pengeluaran (naik/turun/stagnan) dengan angka yang sesuai.
             Format tanggapanmu secara terstruktur:
             
             📌 **Evaluasi & Analisis Arus Kas**
@@ -244,16 +255,47 @@ object GeminiService {
         }
         if (aiReport != null) return@withContext aiReport
 
-        // 3) Offline Fallback Report
-        return@withContext """
-            📌 **Evaluasi & Analisis Arus Kas**
-            • **Arus Kas**: Total Pemasukan Rp ${totalIncome.toLong()} vs Pengeluaran Rp ${totalExpense.toLong()} (Sisa Saldo: Rp ${balance.toLong()}).
-            • **Tinjauan Obyektif**: ${if (totalExpense > totalIncome && totalIncome > 0) "Pengeluaran melampaui pemasukan! Diperlukan pengetatan pada pos operasional dan belanja non-prioritas." else "Rasio keuangan sehat dan berada dalam batas anggaran aman."}
+        // 3) Offline Fallback Report — berbasis data nyata (bukan template kaku).
+        return@withContext buildOfflineAuditReport(insights, balance)
+    }
 
-            💡 **Rekomendasi Strategis**
-            1. **Optimalisasi Anggaran Rutin**: Tetapkan batas plafon mingguan untuk pos operasional harian agar alokasi kas terprediksi.
-            2. **Alokasi Dana Cadangan**: Sisihkan minimal 10%–15% dari pemasukan ke kas cadangan sebelum memenuhi pengeluaran sekunder.
-        """.trimIndent()
+    /** Laporan offline yang merujuk insight data nyata (audit #7). */
+    private fun buildOfflineAuditReport(
+        ins: com.startupmini.nyachat.data.analytics.FinancialInsights,
+        balance: Double
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine("📌 **Evaluasi & Analisis Arus Kas**")
+        sb.appendLine("• **Arus Kas**: Pemasukan Rp ${ins.totalIncome.toLong()} vs Pengeluaran Rp ${ins.totalExpense.toLong()} (Saldo: Rp ${balance.toLong()}).")
+        when {
+            ins.totalExpense > ins.totalIncome && ins.totalIncome > 0 ->
+                sb.appendLine("• **Tinjauan**: Pengeluaran melampaui pemasukan (rasio ${(ins.expenseRate * 100).toInt()}%). Perlu pengetatan. 🚨")
+            ins.savingsRate > 0.2 ->
+                sb.appendLine("• **Tinjauan**: Rasio sehat; menabung ${(ins.savingsRate * 100).toInt()}% dari pemasukan. Pertahankan!")
+            else ->
+                sb.appendLine("• **Tinjauan**: Arus kas cukup pas (tabungan ~${(ins.savingsRate * 100).toInt()}%). Waspada perubahan tak terduga.")
+        }
+        ins.topExpenseCategory?.let { cat ->
+            sb.appendLine("• **Pos terbesar**: $cat (Rp ${ins.topExpenseAmount.toLong()}, ${(ins.topExpensePct * 100).toInt()}% pengeluaran).")
+        }
+        ins.biggestSingleDesc?.let { desc ->
+            sb.appendLine("• **Transaksi tunggal terbesar**: \"$desc\" (Rp ${ins.biggestSingleAmount.toLong()}).")
+        }
+        sb.appendLine("• **Tren**: Pengeluaran ${com.startupmini.nyachat.data.analytics.FinancialInsightsEngine.trendText(ins.expenseChangePct)} dalam 30 hari.")
+        if (ins.topSpender != null) {
+            sb.appendLine("• **Pengeluaran terbesar**: ${ins.topSpender} (Rp ${ins.topSpenderAmount.toLong()}).")
+        }
+
+        sb.appendLine("")
+        sb.appendLine("💡 **Rekomendasi Strategis**")
+        sb.appendLine("1. **Kendalikan pos terbesar (${ins.topExpenseCategory ?: "operasional"})**: pasang plafon mingguan ±Rp ${((ins.topExpenseAmount * 0.9) / 4).toLong()} agar pengeluaran turun.")
+        val savingsTarget = if (ins.savingsRate > 0) {
+            ((ins.savingsRate + 0.05) * 100).toInt().coerceAtMost(30)
+        } else {
+            10
+        }
+        sb.appendLine("2. **Dana cadangan**: sisihkan ±$savingsTarget% dari pemasukan tiap bulan ke kas cadangan.")
+        return sb.toString().trim()
     }
 
     /**

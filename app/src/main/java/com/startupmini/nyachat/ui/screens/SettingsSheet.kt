@@ -47,8 +47,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.startupmini.nyachat.BuildConfig
 import com.startupmini.nyachat.Constants
 import com.startupmini.nyachat.R
@@ -87,7 +90,10 @@ fun SettingsSheet(
     onBackup: () -> Unit,
     onRestore: () -> Unit,
     onClearData: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    // Audit #2: foto profil + aksi ganti foto (null = tidak ada aksi).
+    avatarPath: String? = null,
+    onPickAvatar: (() -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -133,7 +139,13 @@ fun SettingsSheet(
             }
 
             // Kartu identitas workspace (item 8): siapa yang login di workspace ini.
-            IdentityCard(userName = userName, workspaceRole = workspaceRole, workspacePin = workspacePin)
+            IdentityCard(
+                userName = userName,
+                workspaceRole = workspaceRole,
+                workspacePin = workspacePin,
+                avatarPath = avatarPath,
+                onPickAvatar = onPickAvatar
+            )
 
             // ── UMUM ──
             SectionLabel(stringResource(R.string.settings_section_general))
@@ -253,16 +265,25 @@ private fun maskPin(pin: String): String =
     "•".repeat((pin.length - 4).coerceAtLeast(0)) + pin.takeLast(4)
 
 /**
- * Kartu identitas workspace (item 8): avatar inisial + nama + peran + PIN
- * tersamar. Memberi konteks "siapa & di workspace mana" sebelum daftar aksi.
+ * Kartu identitas workspace (item 8): avatar (foto atau inisial) + nama + peran
+ * + PIN tersamar. Memberi konteks "siapa & di workspace mana" sebelum daftar aksi.
+ * Avatar bisa di-tap untuk mengganti foto profil (audit #2) bila [onPickAvatar]
+ * tidak null.
  */
 @Composable
-private fun IdentityCard(userName: String?, workspaceRole: String?, workspacePin: String?) {
+private fun IdentityCard(
+    userName: String?,
+    workspaceRole: String?,
+    workspacePin: String?,
+    avatarPath: String? = null,
+    onPickAvatar: (() -> Unit)? = null
+) {
     val displayName = userName ?: stringResource(R.string.pin_default_name)
     val roleLabel = stringResource(
         if (workspaceRole == Constants.Roles.OWNER) R.string.pin_role_owner
         else R.string.pin_role_member
     )
+    val avatarChangeDesc = stringResource(R.string.avatar_change_desc)
     Surface(
         shape = RoundedCornerShape(Constants.Ui.CORNER_L.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -276,17 +297,38 @@ private fun IdentityCard(userName: String?, workspaceRole: String?, workspacePin
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+                    .then(
+                        if (onPickAvatar != null) {
+                            Modifier.clickable(onClick = onPickAvatar)
+                        } else Modifier
+                    )
+                    .semantics { contentDescription = avatarChangeDesc }
             ) {
-                Text(
-                    text = displayName.take(1).uppercase(Locale.ROOT),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                com.startupmini.nyachat.ui.util.AvatarImage(
+                    name = displayName,
+                    size = 44,
+                    photoPath = avatarPath,
+                    backgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                    textColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    textStyle = MaterialTheme.typography.titleMedium
                 )
+                if (onPickAvatar != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "✚",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
