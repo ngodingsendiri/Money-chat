@@ -1,7 +1,7 @@
 # 💬 Nyachat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-r1.0.3-brightgreen)
+![Versi](https://img.shields.io/badge/versi-r1.1.0-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Nyachat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -40,10 +40,12 @@
 - 📷 **Foto nota belanja** — lampirkan foto nota/struk (kamera atau galeri), AI vision membacanya & langsung mencatat totalnya
 - 📤 **Export rekapan CSV** — *Pengaturan → Export Rekapan (CSV)* → simpan file yang pas dibuka di Excel/Google Sheets jadi tabel rapi (ringkasan, rekap per kategori, riwayat transaksi, riwayat chat)
 - ☁️ **Backup & restore Google Drive** — *Pengaturan → Backup/Restore* → cadangan lengkap (chat + transaksi) di folder privat Drive app, otomatis menyisakan 5 backup terbaru; restore mengembalikan & menyinkronkan ke perangkat lain
-- 🔗 **PIN bisa disalin** — sekali ketuk PIN tersalin ke clipboard, gampang dibagikan ke pasangan
+- 🔗 **PIN bisa disalin** — sekali ketuk PIN tersalin ke clipboard, gampang dibagikan ke pasangan (label "Nyachat PIN" di clipboard)
 - 🔄 **Workspace bersama (PIN)** — beberapa perangkat bisa saling terhubung via PIN unik
 - 👥 **Kelola anggota workspace** — *owner* menyetujui/menolak permintaan bergabung, mengubah peran (owner/member/bendahara/istri/suami), menghapus anggota
-- 🔄 **Sinkronisasi realtime Firestore** — chat & transaksi tersinkron otomatis ke perangkat lain via Firebase Firestore (offline-first tetap jalan)
+- 🔄 **Sinkronisasi realtime Firestore** — chat & transaksi tersinkron otomatis ke perangkat lain via Firebase Firestore (offline-first tetap jalan); **last-writer-wins deterministik pakai server timestamp** (immune clock-skew)
+- 🏷️ **Indikator asal deteksi transaksi** — badge finansial menampilkan "AI" (Gemini/OpenRouter) atau "heuristik" (fallback offline) → transparansi nilai diproses mesin mana
+- 📁 **Lampiran per workspace** — foto nota/dokumen disimpan di folder terpisah per PIN workspace; ganti workspace hanya hapus folder workspace lama, foto workspace lain aman
 - 🌙 **Mode gelap** — nyala/mati manual dari menu pengaturan
 - 🔑 **BYOK (Bring Your Own Key)** — tempel API key sendiri di *Pengaturan → Kunci API*, tersimpan lokal di perangkat
 
@@ -168,13 +170,13 @@ Setiap push ke `main` atau tag `r*` (r1.0.0, r1.0.1, ...) otomatis menjalankan w
 │  Chat + AI → OpenRouter cloud (openrouter.ai)  ← key user  │
 │           → Google Gemini cloud (generativelanguage)  ← key user  │
 │  Data utama → Room (SQLite) di perangkat  ← offline-first │
-│  Sync opsional → Firebase Firestore (butuh google-services.json) │
+│  Sync aktif → Firebase Firestore (google-services.json)  │
 └────────────────────────────────────────────────────────┘
 ```
 
 - **Tanpa server sendiri** — semua berjalan di perangkat + cloud AI pihak ketiga
 - **Database**: Room/SQLite (transaksi & chat tersimpan lokal)
-- **Sync cloud**: `FirestoreSyncManager` sudah dikoding (opsional, belum aktif)
+- **Sync cloud**: `FirestoreSyncManager` aktif — last-writer-wins deterministik pakai `FieldValue.serverTimestamp()` (immune clock-skew), listener realtime, antrian offline (`PendingOp`) dengan exponential backoff.
 
 ---
 
@@ -182,7 +184,7 @@ Setiap push ke `main` atau tag `r*` (r1.0.0, r1.0.1, ...) otomatis menjalankan w
 
 - **Kotlin + Jetpack Compose (Material 3)**
 - Room, OkHttp, Retrofit, Moshi, kotlinx.coroutines
-- Firebase (Auth, Firestore, App Check) — opsional
+- Firebase (Auth, Firestore, App Check) — aktif
 - Gradle 9.3.1 · AGP 9.1.1 · Kotlin 2.x
 
 ---
@@ -192,9 +194,12 @@ Setiap push ke `main` atau tag `r*` (r1.0.0, r1.0.1, ...) otomatis menjalankan w
 - [x] Backup & restore data (Google Drive, v1.2.9)
 - [x] Export rekap CSV (v1.2.9)
 - [x] Workspace bersama + kelola anggota + persetujuan owner (FASE 4, v1.4.0)
-- [x] Sinkronisasi realtime Firestore (FASE 4, v1.4.0)
+- [x] Sinkronisasi realtime Firestore + LWW server-timestamp (FASE 4, v1.4.0)
+- [x] Auto-backup terenkripsi + badge provenance AI/heuristik + attachment namespace (FASE 4, v1.4.0)
 - [ ] APK release bertanda tangan di CI (siap upload Play Store)
 - [ ] Grafik bulanan & notifikasi pengingat
+- [ ] Refactor MainActivity/ChatScreen/RekapScreen (T3)
+- [ ] Upgrade dependensi ke versi stabil terbaru (M1)
 
 ---
 
@@ -204,4 +209,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.0.3**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.1.0**
