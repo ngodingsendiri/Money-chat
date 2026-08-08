@@ -54,7 +54,7 @@ object GeminiService {
     internal const val AI_CALL_TIMEOUT_MS = 60_000L
 
     /** L6: saran cepat statis (fallback saat tanpa key AI / riwayat kosong). */
-    private val DEFAULT_SUGGESTIONS =
+    internal val DEFAULT_SUGGESTIONS =
         listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
 
     suspend fun parseChatMessage(
@@ -108,21 +108,25 @@ object GeminiService {
 
 
     /** L6: true kalau setidaknya satu jalur AI tersedia (OpenRouter atau Gemini BYOK). */
-    fun isAiAvailable(): Boolean =
-        OpenRouterService.activeApiKey() != null ||
-            getApiKey().isNotBlank() && getApiKey() != "MY_GEMINI_API_KEY"
+    fun isAiAvailable(): Boolean {
+        val key = getApiKey()
+        return OpenRouterService.activeApiKey() != null ||
+            key.isNotBlank() && key != "MY_GEMINI_API_KEY"
+    }
 
     suspend fun generateFrequentTransactionSuggestions(
         transactions: List<FinancialTransaction>
     ): List<String> = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
-        // L6: tanpa key AI, jangan buang waktu/timeout di jalur AI — langsung
-        // fallback statis. Mencegah cooldown & delay yang tak perlu di UI.
-        if (!isAiAvailable()) {
+        if (transactions.isEmpty()) {
             return@withContext DEFAULT_SUGGESTIONS
         }
-        if (transactions.isEmpty()) {
-            return@withContext listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
+        // L6: tanpa key AI, jangan buang waktu/timeout di jalur AI — langsung
+        // fallback offline berbasis riwayat transaksi (personal tetap terjaga),
+        // bukan statis kaku. Jalur AI tetap dilewati → hemat kuota & delay.
+        if (!isAiAvailable()) {
+            val fallback = transactions.take(4).map { "${it.description} ${it.amount.toLong()}" }
+            return@withContext fallback.ifEmpty { DEFAULT_SUGGESTIONS }
         }
 
         val transSummary = transactions.take(30).joinToString("\n") {
