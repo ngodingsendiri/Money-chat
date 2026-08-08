@@ -107,7 +107,7 @@
     <!-- PIN / onboarding -->
     <string name="pin_image_desc">Logo Nyachat</string>
     <string name="pin_title">Nyachat</string>
-    <string name="pin_subtitle">Nyatat keuangan cukup dengan Chat</string>
+    <string name="pin_subtitle">Mencatat keuangan cukup dengan Chat</string>
 
     <!-- Google Sign-In -->
     <string name="google_sign_in">Masuk dengan Google</string>
@@ -125,6 +125,8 @@
     <string name="google_not_configured">Google Sign-In belum dikonfigurasi. Aktifkan Google di Firebase Console (Authentication → Sign-in method) &amp; daftarkan SHA-1 penandatangan APK (lihat README → \'Setup Google Sign-In\'), lalu unduh ulang google-services.json dan ganti file di folder app/.</string>
     <string name="login_version_label">Nyachat %1$s · build %2$d</string>
     <string name="pin_name_label">Nama Anda (Cth: Suami / Istri)</string>
+    <!-- BUG-04: tombol clear cepat untuk field nama prefilled dari Google -->
+    <string name="pin_name_clear">Hapus isi nama</string>
     <string name="pin_your_pin">PIN Anda</string>
     <string name="pin_share_hint">Gunakan PIN ini untuk menghubungkan akun pada perangkat lain.</string>
     <string name="pin_copy">Salin PIN</string>

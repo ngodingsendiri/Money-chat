@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -246,7 +247,7 @@ fun PinConnectScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(24.dp),
                 verticalArrangement = Arrangement.Center,
@@ -294,6 +295,16 @@ fun PinConnectScreen(
                         value = myName,
                         onValueChange = { myName = it },
                         label = { Text(stringResource(R.string.pin_name_label)) },
+                        trailingIcon = {
+                            if (myName.isNotBlank()) {
+                                IconButton(onClick = { myName = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = stringResource(R.string.pin_name_clear)
+                                    )
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
                         singleLine = true,
