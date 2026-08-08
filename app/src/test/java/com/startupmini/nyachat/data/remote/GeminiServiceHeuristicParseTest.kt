@@ -56,6 +56,26 @@ class GeminiServiceHeuristicParseTest {
         assertEquals(50000.0, r.amount!!, 0.001)
     }
 
+    // ---- K1: nominal ribuan bertitik bertingkat (≥ 1 juta) ----
+
+    @Test
+    fun deteksiNominalJutaBertitikGanda() {
+        // Bug lama: "(\\d+(?:[.,]\\d+)?)" hanya mengekstrak grup pertama "1.500",
+        // menyisakan ".000" → dianggap Rp 1.500 (salah total). Sekarang harus 1.500.000.
+        val r = GeminiService.offlineHeuristicParse("gaji tanggal 1.500.000", "Suami")
+        assertTrue(r.containsTransaction)
+        assertEquals("PEMASUKAN", r.type)
+        assertEquals(1500000.0, r.amount!!, 0.001)
+    }
+
+    @Test
+    fun extractAmountMenerimaJutaBertitik() {
+        assertEquals(1_500_000.0, GeminiService.extractAmountFromText("gaji 1.500.000")!!, 0.001)
+        assertEquals(15_000_000.0, GeminiService.extractAmountFromText("beli motor 15.000.000")!!, 0.001)
+        assertEquals(1_200.0, GeminiService.extractAmountFromText("bayar 1.200")!!, 0.001)
+        assertEquals(2_500_000.0, GeminiService.extractAmountFromText("transfer 2,5jt")!!, 0.001)
+    }
+
     @Test
     fun pesanBiasaBukanTransaksi() {
         val r = GeminiService.offlineHeuristicParse("halo, apa kabar hari ini?", "Suami")

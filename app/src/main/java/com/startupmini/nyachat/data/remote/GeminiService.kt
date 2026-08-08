@@ -620,9 +620,11 @@ object GeminiService {
 
     /** Pola angka + satuan opsional: "50rb", "50.000", "2,5jt", "5 juta", "10k".
      *  `(?![a-z])` mencegah huruf biasa terbaca sebagai satuan — mis. 'k' pada
-     *  "2 kopi" bukan satuan ribu. */
+     *  "2 kopi" bukan satuan ribu. `(?:[.,]\d+)*` menangkap SELURUH grup ribuan
+     *  + desimal ("1.500.000", "2,5jt") — bukan cuma satu grup agar nominal
+     *  ≥ 1 juta bertitik tidak terpotong (K1). */
     private val NUMBER_UNIT_PATTERN =
-        Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:(rb|ribu|k|jt|juta)(?![a-z]))?")
+        Pattern.compile("(\\d+(?:[.,]\\d+)*)\\s*(?:(rb|ribu|k|jt|juta)(?![a-z]))?")
 
     /**
      * Ekstrak nominal Rupiah dari teks bebas. Angka BERSATUAN (rb/ribu/k/jt/juta)
@@ -681,7 +683,11 @@ object GeminiService {
                 textLower.contains("sewa") || textLower.contains("pulsa") ||
                 textLower.contains("listrik") || textLower.contains("air") ||
                 textLower.contains("popok") || textLower.contains("susu") ||
-                textLower.contains("makan") || textLower.contains("transaksi")
+                textLower.contains("makan") || textLower.contains("transaksi") ||
+                textLower.contains("bensin") || textLower.contains("taxi") ||
+                textLower.contains("ojek") || textLower.contains("grab") ||
+                textLower.contains("gojek") || textLower.contains("tol") ||
+                textLower.contains("parkir") || textLower.contains("isi")
         )
 
         if (isIncome && amount != null && amount > 0) {
@@ -695,13 +701,13 @@ object GeminiService {
             )
         } else if (isExpenseTrigger && amount > 0) {
             val category = when {
-                textLower.contains("beras") || textLower.contains("minyak") || textLower.contains("sayur") || textLower.contains("sembako") || textLower.contains("pasar") || textLower.contains("supermarket") -> "Groceries & Sembako"
-                textLower.contains("makan") || textLower.contains("minum") || textLower.contains("kopi") || textLower.contains("bakso") || textLower.contains("snack") -> "Makanan & Minuman"
+                textLower.contains("beras") || textLower.contains("minyak") || textLower.contains("sayur") || textLower.contains("sembako") || textLower.contains("pasar") || textLower.contains("supermarket") || textLower.contains("market") -> "Groceries & Sembako"
+                textLower.contains("makan") || textLower.contains("minum") || textLower.contains("kopi") || textLower.contains("bakso") || textLower.contains("snack") || textLower.contains("nasi") -> "Makanan & Minuman"
                 textLower.contains("listrik") || textLower.contains("air") || textLower.contains("wifi") || textLower.contains("pulsa") || textLower.contains("kontrakan") || textLower.contains("pbb") -> "Tagihan & Utilitas"
                 textLower.contains("popok") || textLower.contains("susu") || textLower.contains("sekolah") || textLower.contains("mainan") || textLower.contains("anak") -> "Kebutuhan Anak"
-                textLower.contains("bensin") || textLower.contains("ojek") || textLower.contains("grab") || textLower.contains("gojek") || textLower.contains("tol") || textLower.contains("parkir") -> "Transportasi"
+                textLower.contains("bensin") || textLower.contains("ojek") || textLower.contains("grab") || textLower.contains("gojek") || textLower.contains("tol") || textLower.contains("parkir") || textLower.contains("taxi") -> "Transportasi"
                 textLower.contains("skincare") || textLower.contains("obat") || textLower.contains("dokter") || textLower.contains("sabun") || textLower.contains("shampoo") -> "Kesehatan & Skincare"
-                textLower.contains("baju") || textLower.contains("sepatu") || textLower.contains("nonton") || textLower.contains("tas") || textLower.contains("shopee") || textLower.contains("tokped") -> "Hiburan & Belanja"
+                textLower.contains("baju") || textLower.contains("sepatu") || textLower.contains("nonton") || textLower.contains("tas") || textLower.contains("shopee") || textLower.contains("tokped") || textLower.contains("belanja") -> "Hiburan & Belanja"
                 else -> "Lain-lain"
             }
 
