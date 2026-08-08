@@ -1,6 +1,6 @@
 # Checklist Rilis ke Google Play (Nyachat)
 
-Checklist langkah demi langkah untuk mengirim **Nyachat** (r1.1.2 / versionCode 25)
+Checklist langkah demi langkah untuk mengirim **Nyachat** (r1.1.3 / versionCode 25)
 ke Google Play Console. Dibuat untuk memastikan tidak ada item yang terlewat.
 
 ---
@@ -20,8 +20,8 @@ ke Google Play Console. Dibuat untuk memastikan tidak ada item yang terlewat.
 
 1. Pastikan semua secret di atas tersedia (khususnya keystore upload).
 2. Buka tab **Actions → Build APK**.
-3. Jalankan build (Workflow dispatch), atau `push` tag `r*` (r1.1.0, ...).
-4. Unduh artifact **`Nyachat-r1.1.2-release-aab`** → file `app-release.aab`.
+3. Jalankan build (Workflow dispatch), atau `push` tag `r*` (r1.1.3, ...).
+4. Unduh artifact **`Nyachat-r1.1.3-release-aab`** → file `app-release.aab`.
    - Artifact debug (`...-debug.apk`) & release APK juga dibuat.
 5. *(Opsional lokal)* `./gradlew :app:bundleRelease` — butuh `KEYSTORE_PATH`/`STORE_PASSWORD`/`KEY_PASSWORD`.
 
@@ -128,7 +128,7 @@ Formulir "Data safety" di Console → **Kebijakan → Data safety & content rati
 1. Console → **Release → Production → Buat rilis baru** → buat release tracks
    (Production, atau Internal Testing untuk uji awal).
 2. Unggah `app-release.aab`.
-3. Catatan rilis: versi `r1.1.0` – `Auto-backup terenkripsi + badge provenance AI/heuristik + lampiran namespace per workspace + tie-break deterministik server timestamp + rate-limit join request + recentContext di prompt AI + heuristik fix + PIN clipboard label + prune error aggregasi + Room v11.`
+3. Catatan rilis: versi `r1.1.3` – `FASE 1-5: sync lintas perangkat (server timestamp), rules diperketat, backup terenkripsi otomatis, badge provenance AI/heuristik, lampiran per workspace, saran cepat tanpa AI key, versi via gradle.properties, Room v11.`
 4. Terbitkan → tunggu review Google (biasanya jam–hari).
 
 ---

@@ -43,7 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **T2**: README bagian risiko `debug.keystore` diperluas — mitigasi Firebase
   App Check, Play App Signing, & edukasi download resmi.
 
-## [Unreleased] - Fix v1.1.0
+## [r1.1.0] - 2026-08-08
+
+> Fitur FASE 1-4 di bawah semuanya sudah dirilis — r1.1.2/r1.1.3 adalah build
+> CI pertama yang sukses (r1.1.0/r1.1.1 gagal di step snapshot Roborazzi).
 
 ### Fixed
 - **BUG-01**: Snackbar 'Urungkan' action now works correctly — was opening 'Kelola Anggota' due to SnackbarHost overlapping TopAppBar when keyboard visible. Fixed by increasing top padding from 8dp to 72dp to clear TopAppBar + status bar.
