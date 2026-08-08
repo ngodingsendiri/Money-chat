@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatMessage::class, FinancialTransaction::class, PendingOp::class],
-    version = 10,
+    version = 11,
     // Skema diekspor ke app/schemas (room.schemaLocation di build.gradle.kts)
     // supaya sejarah migrasi bisa direview di code review.
     exportSchema = true
@@ -115,6 +115,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v10 -> v11 (M4 + M7):
+        // - M4: serverUpdatedAt (Long, millis waktu server Firestore) di pesan &
+        //   transaksi → resolusi konflik sync deterministik (imun selisih jam).
+        // - M7: detectedBy ("AI"|"HEURISTIK") di pesan → indikator di badge bahwa
+        //   deteksi finansial berasal dari AI atau fallback heuristik offline.
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN serverUpdatedAt INTEGER")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN detectedBy TEXT")
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN serverUpdatedAt INTEGER")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -122,7 +135,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "keuangan_pasutri_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                     .build()
                 INSTANCE = instance
                 instance

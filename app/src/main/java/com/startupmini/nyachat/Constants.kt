@@ -18,6 +18,11 @@ object Constants {
         const val LAST_UPDATE_CHECK = "last_update_check"
         const val LAST_AUTO_BACKUP = "last_auto_backup"
         const val BACKUP_ENCRYPTED = "backup_encrypted"
+        // M5: passphrase otomatis untuk backup terenkripsi diam-diam (auto-backup
+        // 24 jam). Disimpan di SecureStorage (Android Keystore), bukan prefs biasa
+        // — passphrase yang dipakai user manual (dialog) TETAP dipakai untuk
+        // backup manual; kunci ini khusus jalur silentBackup.
+        const val BACKUP_AUTO_PASSPHRASE = "backup_auto_passphrase"
     }
 
     // ===== Firestore collection names =====

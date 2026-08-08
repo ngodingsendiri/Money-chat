@@ -213,6 +213,8 @@ object DataExporter {
             .putOpt("chatMessageId", t.chatMessageId)
             .putOpt("cloudId", t.cloudId)
             .putOpt("sourceMessageCloudId", t.sourceMessageCloudId)
+            // M4: server timestamp ikut dibackup agar tie-break mrgl tidak hilang.
+            .putOpt("serverUpdatedAt", t.serverUpdatedAt)
 
     /** Serialisasi pesan → JSON (dipakai untuk backup & antrian sync). */
     internal fun messageToJson(m: ChatMessage): JSONObject =
@@ -232,6 +234,10 @@ object DataExporter {
             .putOpt("editedAt", m.editedAt)
             .putOpt("cloudId", m.cloudId)
             .putOpt("sourceMessageCloudId", m.sourceMessageCloudId)
+            // M4/M7: kolom baru ikut dibackup agar restore tidak kehilangan
+            // penanda asal deteksi & tie-break server.
+            .putOpt("detectedBy", m.detectedBy)
+            .putOpt("serverUpdatedAt", m.serverUpdatedAt)
 
     /** Parse transaksi dari JSON. */
     internal fun transactionFromJson(o: JSONObject): FinancialTransaction =
@@ -245,7 +251,8 @@ object DataExporter {
             editedAt = o.optNullableLong("editedAt"),
             chatMessageId = o.optNullableLong("chatMessageId"),
             cloudId = o.optNullableString("cloudId"),
-            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId")
+            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId"),
+            serverUpdatedAt = o.optNullableLong("serverUpdatedAt")
         )
 
     /** Parse pesan dari JSON (lampiran lokal yang filenya sudah hilang dibuang). */
@@ -269,7 +276,9 @@ object DataExporter {
             replyToText = o.optNullableString("replyToText"),
             editedAt = o.optNullableLong("editedAt"),
             cloudId = o.optNullableString("cloudId"),
-            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId")
+            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId"),
+            detectedBy = o.optNullableString("detectedBy"),
+            serverUpdatedAt = o.optNullableLong("serverUpdatedAt")
         )
     }
 

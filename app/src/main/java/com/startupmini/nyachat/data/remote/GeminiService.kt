@@ -22,7 +22,10 @@ data class AiChatParseResult(
     val category: String? = null,
     val amount: Double? = null,
     val description: String? = null,
-    val aiReply: String
+    val aiReply: String,
+    // M7: asal deteksi — "AI" (Gemini/OpenRouter) atau "HEURISTIK" (fallback
+    // offline). Disimpan di ChatMessage.detectedBy untuk indikator badge UI.
+    val detectedBy: String? = null
 )
 
 object GeminiService {
@@ -58,9 +61,9 @@ object GeminiService {
     ): AiChatParseResult = withContext(Dispatchers.IO) {
         // Pesan dengan foto nota → prompt khusus membaca nota; teks biasa → prompt standar.
         val prompt = if (imagePath != null) {
-            buildReceiptPrompt(messageText, sender)
+            buildReceiptPrompt(messageText, sender, recentContext)
         } else {
-            buildParsePrompt(messageText, sender)
+            buildParsePrompt(messageText, sender, recentContext)
         }
 
         // Seluruh jalur AI dibatasi waktu total (B6) — lewat batas, fallback offline.
@@ -453,9 +456,13 @@ object GeminiService {
 
     /** Prompt khusus untuk foto nota/bukti belanja — AI diminta membaca isi foto
      *  lalu mengeluarkan JSON transaksi yang sama dengan parser teks. */
-    private fun buildReceiptPrompt(messageText: String, sender: String): String {
+    private fun buildReceiptPrompt(messageText: String, sender: String, recentContext: List<ChatMessage>): String {
+        val contextBlock = contextBlock(recentContext)
         return """
             Kamu adalah 'Asisten Nyachat' yang bertugas membaca FOTO NOTA / BUKTI BELANJA / STRUK dari $sender.
+            
+            Konteks obrolan terbaru (untuk mencocokkan kategori/deskripsi yang konsisten):
+            ${contextBlock.ifEmpty { "— (riwayat kosong)" }}
             
             Foto yang kamu terima adalah nota belanja. Analisis foto tersebut dan catat TOTAL pengeluarannya.
             Keterangan tambahan dari pengirim: "$messageText"
@@ -489,9 +496,13 @@ object GeminiService {
         """.trimIndent()
     }
 
-    private fun buildParsePrompt(messageText: String, sender: String): String {
+    private fun buildParsePrompt(messageText: String, sender: String, recentContext: List<ChatMessage>): String {
+        val contextBlock = contextBlock(recentContext)
         return """
             Kamu adalah 'Asisten Nyachat' yang bertugas memantau obrolan transaksi finansial pada grup, lembaga, atau rumah tangga.
+            
+            Konteks obrolan terbaru (untuk mencocokkan kategori/deskripsi yang konsisten):
+            ${contextBlock.ifEmpty { "— (riwayat kosong)" }}
             
             Pesan masuk dari $sender: "$messageText"
             
@@ -524,6 +535,17 @@ object GeminiService {
               "aiReply": "Catatan pesan tersimpan dalam ruang obrolan."
             }
         """.trimIndent()
+    }
+
+    /** Format riwayat obrolan terakhir untuk disisipkan ke prompt AI (M11).
+     *  Denga konteks, AI bisa menebak kategori/deskripsi yang konsisten dengan
+     *  transaksi sebelumnya. Pesan tanpa teks ditapis. */
+    private fun contextBlock(recentContext: List<ChatMessage>): String {
+        if (recentContext.isEmpty()) return ""
+        return recentContext
+            .filter { it.messageText.isNotBlank() }
+            .takeLast(6)
+            .joinToString("\n") { "${it.sender}: ${it.messageText.take(120)}" }
     }
 
     private fun callGeminiApi(prompt: String, apiKey: String, imagePath: String? = null): String {
@@ -604,7 +626,9 @@ object GeminiService {
                     category = json.optString("category", "Lain-lain"),
                     amount = json.optDouble("amount", 0.0),
                     description = json.optString("description", originalText),
-                    aiReply = json.optString("aiReply", "Pesan telah dicatat sebagai transaksi.")
+                    aiReply = json.optString("aiReply", "Pesan telah dicatat sebagai transaksi."),
+                    // M7: hasil dari AI (Gemini/OpenRouter) — bukan heuristik lokal.
+                    detectedBy = "AI"
                 )
             } else {
                 AiChatParseResult(
@@ -630,8 +654,12 @@ object GeminiService {
      * Ekstrak nominal Rupiah dari teks bebas. Angka BERSATUAN (rb/ribu/k/jt/juta)
      * diprioritaskan atas angka polos karena jauh lebih mungkin nominal transaksi:
      * "beli 2 kopi 20rb" mengambil 20rb (Rp 20.000), bukan 2 (Rp 2.000).
-     * Tanpa angka bersatuan, fallback ke angka pertama; angka polos kecil
-     * (1–999) dianggap ribuan sesuai kebiasaan chat Indonesia.
+     * Tanpa angka bersatuan, fallback ke angka pertama.
+     *
+     * L2: angka polos dengan < 2 digit (1–9) TANPA satuan ditolak — mis. "makan
+     * 2 kucing" / "beli 3 botol" sebenarnya jumlah item, bukan nominal. Konteks
+     * ini mengurangi false-positive heuristik. Hanya nilai ≥ 10 (dianggap "ribuan"
+     * lewat toRupiah) atau angka bersatuan yang diterima sebagai nominal.
      */
     internal fun extractAmountFromText(textLower: String): Double? {
         val matcher = NUMBER_UNIT_PATTERN.matcher(textLower)
@@ -640,6 +668,8 @@ object GeminiService {
             val numStr = matcher.group(1) ?: continue
             val unit = matcher.group(2)
             if (!unit.isNullOrEmpty()) return toRupiah(numStr, unit)
+            // L2: angka polos 1 digit (0–9) = kuantitas, bukan nominal.
+            if (numStr.count { it.isDigit() } < 2) continue
             if (fallbackNum == null) fallbackNum = numStr
         }
         val num = fallbackNum ?: return null
@@ -697,6 +727,8 @@ object GeminiService {
                 category = "Gaji & Pemasukan",
                 amount = amount,
                 description = messageText,
+                // M7: dihasilkan mesin aturan lokal (fallback offline) — bukan AI.
+                detectedBy = "HEURISTIK",
                 aiReply = "Mantap! Aku catat PEMASUKAN sebesar Rp ${amount.toLong()} (${messageText}). Saldo bertambah! 💰"
             )
         } else if (isExpenseTrigger && amount > 0) {
@@ -717,6 +749,8 @@ object GeminiService {
                 category = category,
                 amount = amount,
                 description = messageText,
+                // M7: hasil mesin heuristik offline.gv
+                detectedBy = "HEURISTIK",
                 aiReply = "Pengeluaran Rp ${amount.toLong()} ($category: $messageText) dicatat oleh $sender."
             )
         }

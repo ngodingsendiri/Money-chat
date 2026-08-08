@@ -120,7 +120,10 @@ class FinanceRepository(
                     isFinancial = true,
                     detectedAmount = aiResult.amount,
                     detectedCategory = aiResult.category,
-                    detectedType = aiResult.type
+                    detectedType = aiResult.type,
+                    // M7: catat asal deteksi (AI atau heuristik offline) untuk
+                    // indikator transparansi di badge financisial.
+                    detectedBy = aiResult.detectedBy
                 )
                 chatMessageDao.insertMessage(finalMsg)
 
@@ -159,7 +162,9 @@ class FinanceRepository(
                 isFinancial = isFinancial,
                 detectedAmount = if (isFinancial) aiResult.amount else null,
                 detectedCategory = if (isFinancial) aiResult.category else null,
-                detectedType = if (isFinancial) aiResult.type else null
+                detectedType = if (isFinancial) aiResult.type else null,
+                // M7: perbarui asal deteksi juga saat edit.
+                detectedBy = if (isFinancial) aiResult.detectedBy else null
             )
             chatMessageDao.updateMessage(updated)
 
@@ -402,7 +407,8 @@ internal fun ChatMessage.clearFinancialBadge(): ChatMessage =
         isFinancial = false,
         detectedAmount = null,
         detectedCategory = null,
-        detectedType = null
+        detectedType = null,
+        detectedBy = null
     )
 
 /**

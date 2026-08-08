@@ -118,6 +118,9 @@ object MembershipManager {
      * (anggota tidak punya izin baca, jadi jangan sampai kena PERMISSION_DENIED).
      */
     fun start(pin: String, role: String) {
+        // stop() di sini (selain yang dipicu FirestoreSyncManager.start) bersifat
+        // idempoten — dipanggil dua kali saat startup (L12) tapi tidak berbahaya:
+        // membersListener/joinRequestsListener null-safe & state di-reset bersih.
         stop()
         currentPin = pin
         activeRole = role

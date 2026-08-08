@@ -118,9 +118,19 @@ class GeminiServiceHeuristicParseTest {
 
     @Test
     fun hurufKataBukanSatuanRibuan() {
-        // 'k' pada "kopi" tidak boleh terbaca sebagai satuan ribu —
-        // tanpa angka bersatuan, fallback angka pertama tetap berlaku.
-        assertEquals(2000.0, GeminiService.extractAmountFromText("beli 2 kopi")!!, 0.001)
+        // 'k' pada "kopi" tidak boleh terbaca sebagai satuan ribu. Karena "2"
+        // adalah angka polos 1 digit (kuantitas, L2), fallback → null.
+        assertEquals(null, GeminiService.extractAmountFromText("beli 2 kopi"))
+    }
+
+    // ---- L2: angka polos 1 digit tanpa satuan = kuantitas, bukan nominal ----
+
+    @Test
+    fun angkaPolosSatuDigitTanpaSatuanDianggapKuantitas() {
+        // "makan 2 kucing" → "2" adalah jumlah item, bukan Rp 2.000.
+        assertEquals(null, GeminiService.extractAmountFromText("makan 2 kucing"))
+        val r = GeminiService.offlineHeuristicParse("makan 2 kucing", "Suami")
+        assertFalse(r.containsTransaction)
     }
 
     @Test

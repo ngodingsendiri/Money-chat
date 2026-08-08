@@ -124,7 +124,54 @@ class AppDatabaseMigrationTest {
                 if (idx.getString(1) == "index_financial_transactions_sourceMessageCloudId") hasSourceIdx = true
             }
             idx.close()
-            assertTrue("index financial_transactions(sourceMessageColumnId) tidak ditambahkan v9→v10", hasSourceIdx)
+            assertTrue("index financial_transactions(sourceMessageCloudId) tidak ditambahkan v9→v10", hasSourceIdx)
+        }
+    }
+
+    /**
+     * v10→v11 (M4+M7): kolom serverUpdatedAt (chat + transaksi) & detectedBy
+     * (chat) harus ada, nilai lama tidak hilang, dan kolom baru bernilai NULL
+     * untuk data lama (default).
+     */
+    @Test
+    fun migrate10To11_addsServerTimestampAndDetectionSource() {
+        helper.createDatabase(TEST_DB, 10).apply {
+            execSQL(
+                "INSERT INTO chat_messages (id, sender, messageText, timestamp, isFinancial) " +
+                    "VALUES (1, 'Suami', 'Beli bensin 50.000', 1752000000000, 1)"
+            )
+            execSQL(
+                "INSERT INTO financial_transactions " +
+                    "(id, type, category, amount, description, loggedBy, timestamp, chatMessageId, cloudId) " +
+                    "VALUES (1, 'EXPENSE', 'Transportasi', 50000.0, 'Beli bensin', 'Suami', " +
+                    "1752000000000, 1, 'tx-cloud-1')"
+            )
+            close()
+        }
+
+        helper.runMigrationsAndValidate(
+            TEST_DB, 11, true, AppDatabase.MIGRATION_10_11
+        ).use { db ->
+            // Kolom baru ada & data lama tetap.
+            val cols = db.query("PRAGMA table_info(chat_messages)")
+            val msgColNames = mutableSetOf<String>()
+            while (cols.moveToNext()) { msgColNames.add(cols.getString(1)) }
+            cols.close()
+            assertTrue("chat_messages.serverUpdatedAt hilang", msgColNames.contains("serverUpdatedAt"))
+            assertTrue("chat_messages.detectedBy hilang", msgColNames.contains("detectedBy"))
+
+            val txCols = db.query("PRAGMA table_info(financial_transactions)")
+            val txColNames = mutableSetOf<String>()
+            while (txCols.moveToNext()) { txColNames.add(txCols.getString(1)) }
+            txCols.close()
+            assertTrue("financial_transactions.serverUpdatedAt hilang", txColNames.contains("serverUpdatedAt"))
+
+            val rows = db.query("SELECT messageText, serverUpdatedAt, detectedBy FROM chat_messages WHERE id = 1")
+            assertTrue(rows.moveToFirst())
+            assertEquals("Beli bensin 50.000", rows.getString(0))
+            assertTrue("serverUpdatedAt lama harus NULL", rows.isNull(1))
+            assertTrue("detectedBy lama harus NULL", rows.isNull(2))
+            rows.close()
         }
     }
 }

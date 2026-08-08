@@ -174,7 +174,10 @@ fun ChatScreen(
     onEditMessage: (Long, String) -> Unit,
     onAskAiClicked: (String) -> Unit,
     onDeleteMessage: (Long) -> Unit,
-    onOpenTransaction: (ChatMessage) -> Unit = {}
+    onOpenTransaction: (ChatMessage) -> Unit = {},
+    // M9: PIN workspace aktif — lampiran (foto nota/dokumen) disimpan di folder
+    // khusus per-workspace supaya ganti workspace tidak merusak foto workspace lama.
+    workspacePin: String? = null
 ) {
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val semantic = LocalSemanticColors.current
@@ -220,14 +223,14 @@ fun ChatScreen(
         cameraTempUri = null
         if (success && uri != null) {
             coroutineScope.launch {
-                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri)
+                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri, workspacePin)
             }
         }
     }
     val pickGalleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             coroutineScope.launch {
-                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri)
+                pendingImagePath = ImageFileUtil.saveImageFromUri(context, uri, workspacePin)
             }
         }
     }
@@ -236,7 +239,7 @@ fun ChatScreen(
     ) { uri ->
         if (uri != null) {
             coroutineScope.launch {
-                val saved = ImageFileUtil.saveFileFromUri(context, uri)
+                val saved = ImageFileUtil.saveFileFromUri(context, uri, workspacePin)
                 if (saved != null) {
                     pendingFilePath = saved.path
                     pendingFileName = saved.name
@@ -1282,6 +1285,32 @@ fun ChatMessageBubble(
                                 fontWeight = FontWeight.Medium,
                                 color = tagColor
                             )
+                            // M7: indikator kantor SUMBER deteksi (AI vs heuristik offline).
+                            // Transparansi: user tahu nilai di badge diproses AI atau
+                            // mesin aturan lokal (mis. tanpa kunci API / offline).
+                            message.detectedBy?.let { source ->
+                                if (source.equals("HEURISTIK", ignoreCase = true) ||
+                                    source.equals("AI", ignoreCase = true)
+                                ) {
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    val isAi = source.equals("AI", ignoreCase = true)
+                                    val indicatorText = stringResource(
+                                        if (isAi) R.string.badge_detected_ai
+                                        else R.string.badge_detected_heuristic
+                                    )
+                                    val indicatorDesc = stringResource(
+                                        if (isAi) R.string.badge_detected_ai_desc
+                                        else R.string.badge_detected_heuristic_desc
+                                    )
+                                    Text(
+                                        text = indicatorText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = tagColor.copy(alpha = 0.7f),
+                                        modifier = Modifier.semantics { contentDescription = indicatorDesc }
+                                    )
+                                }
+                            }
                         }
                     }
                 }

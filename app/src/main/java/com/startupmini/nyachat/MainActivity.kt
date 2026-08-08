@@ -96,12 +96,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -157,6 +155,14 @@ class MainActivity : ComponentActivity() {
             val appPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
             val secureStorage = SecureStorage
 
+            /** M5: passphrase acak 32 karakter base64 untuk auto-backup terenkripsi.
+             *  Dibangkitkan sekali per instalasi & disimpan di Keystore. */
+            fun newAutoBackupPassphrase(): String {
+                val bytes = ByteArray(24)
+                java.security.SecureRandom().nextBytes(bytes)
+                return android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+            }
+
             // State UI dari prefs baru (non-secret)
             var isDarkMode by remember { mutableStateOf(appPrefs.getBoolean(Constants.Prefs.IS_DARK_MODE, false)) }
 
@@ -197,7 +203,6 @@ class MainActivity : ComponentActivity() {
                 var showConfirmClearDialog by remember { mutableStateOf(false) }
                 var showPinDialog by remember { mutableStateOf(false) }
                 var editTarget by remember { mutableStateOf<FinancialTransaction?>(null) }
-                val clipboard = LocalClipboardManager.current
 
                 // Non-secret dari appPrefs
                 var workspaceRole by remember { mutableStateOf(appPrefs.getString(Constants.Prefs.WORKSPACE_ROLE, Constants.Defaults.ROLE)) }
@@ -278,6 +283,19 @@ class MainActivity : ComponentActivity() {
                 driveController.parseRestore = { json, passphrase -> viewModel.parseRestore(json, passphrase) }
                 driveController.restoreParsedBackup = { viewModel.restoreParsedBackup(it) }
                 driveController.getEncryptionEnabled = { backupEncrypted }
+                // M5: auto-passphrase backup terenkripsi — dibangkitkan sekali &
+                // disimpan di SecureStorage (Keystore). Auto-backup 24 jam tetap
+                // berjalan walau enkripsi aktif, dan restore di device yang sama
+                // otomatis memakai passphrase ini (tanpa dialog).
+driveController.getAutoPassphrase = {
+                    // silentBackup berjalan di dispatcher IO — keystore ops async.
+                    var auto = secureStorage.getSecretAsync(context, Constants.Prefs.BACKUP_AUTO_PASSPHRASE)
+                    if (auto.isNullOrBlank()) {
+                        auto = newAutoBackupPassphrase()
+                        secureStorage.putSecretAsync(context, Constants.Prefs.BACKUP_AUTO_PASSPHRASE, auto)
+                    }
+                    auto
+                }
                 driveController.onSuccessfulBackup = {
                     val now = System.currentTimeMillis()
                     appPrefs.edit().putLong(Constants.Prefs.LAST_AUTO_BACKUP, now).apply()
@@ -622,6 +640,7 @@ class MainActivity : ComponentActivity() {
                                             messages = messages,
                                             activeSender = activeSender,
                                             isAiThinking = isAiThinking,
+                                            workspacePin = workspacePin,
                                             onSendMessage = { text, imagePath, filePath, fileName, replyToSender, replyToText ->
                                                 viewModel.sendMessage(
                                                     text, imagePath, filePath, fileName, replyToSender, replyToText
@@ -823,7 +842,11 @@ class MainActivity : ComponentActivity() {
                                         TextButton(
                                             onClick = {
                                                 workspacePin?.let {
-                                                    clipboard.setText(AnnotatedString(it))
+                                                    // L7: ClipData berlabel supaya clipboard privacy/permission
+                                                    // (API ≥ 31) menampilkan origin app dan mencegah app lain
+                                                    // membaca PIN tanpa izin.
+                                                    val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Nyachat", it))
                                                     showSnack(context.getString(R.string.pin_copied), null, null)
                                                 }
                                                 showPinDialog = false

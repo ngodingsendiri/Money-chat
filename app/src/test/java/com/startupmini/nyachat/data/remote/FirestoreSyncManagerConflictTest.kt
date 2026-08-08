@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -115,6 +116,53 @@ class FirestoreSyncManagerConflictTest {
         assertEquals(100L, FirestoreSyncManager.effectiveSortTime(null, 100L))
     }
 
+    // ---------- M4: tie-break deterministik serverUpdatedAt ----------
+
+    @Test
+    fun serverTimeCloudLebihBaruMenangWalauWaktuLokalSama() {
+        // Jam perangkat identik tapi edit datang dari cloud dengan server time
+        // lebih baru — server (penulis nyata) yang menentukan, bukan jam lokal.
+        val newer = FirestoreSyncManager.cloudIsNewer(
+            existingEditedAt = 300L, existingTimestamp = 100L, existingServerUpdatedAt = 1000L,
+            cloudEditedAt = 300L, cloudTimestamp = 100L, cloudServerUpdatedAt = 2000L
+        )
+        assertTrue(newer)
+    }
+
+    @Test
+    fun serverTimeCloudLebihTuaTidakMenimpa() = runBlocking {
+        val dao = FakeChatMessageDao()
+        dao.insertMessage(message("m1", "edit lokal", timestamp=100, editedAt = 300).copy(serverUpdatedAt = 2000L))
+
+        FirestoreSyncManager.upsertMessage(
+            dao,
+            CloudMessage(cloudId = "m1", sender = "Suami", messageText = "versi cloud tua",
+                timestamp = 100, editedAt = 100, serverUpdatedAt = 1000L)
+        )
+
+        assertEquals("edit lokal", dao.getByCloudId("m1")?.messageText)
+    }
+
+    @Test
+    fun serverTimeSamaTapiTidakLebihTuaMasihMenerimaCloud() {
+        // Server time identik → pemutus ke waktu efektif, cloud tidak lebih tua
+        // jadi diterima (konvergen) — perilaku lama tetap dipertahankan.
+        val accepted = FirestoreSyncManager.cloudIsNewer(
+            existingEditedAt = 200L, existingTimestamp = 100L, existingServerUpdatedAt = 3000L,
+            cloudEditedAt = 200L, cloudTimestamp = 100L, cloudServerUpdatedAt = 3000L
+        )
+        assertTrue(accepted)
+    }
+
+    @Test
+    fun tanpaServerUpdatedAt_FallbackWaktuLokal() {
+        val newer = FirestoreSyncManager.cloudIsNewer(
+            existingEditedAt = 200L, existingTimestamp = 100L, existingServerUpdatedAt = null,
+            cloudEditedAt = 200L, cloudTimestamp = 100L, cloudServerUpdatedAt = null
+        )
+        assertTrue(newer)
+    }
+
     // ---------- Konflik pesan: last-writer-by-time ----------
 
     @Test
@@ -167,6 +215,21 @@ class FirestoreSyncManagerConflictTest {
         )
 
         assertEquals("halo", dao.getByCloudId("m-baru")?.messageText)
+    }
+
+    // ---------- M7: detectedBy (asal deteksi) dipertahankan saat upsert ----------
+
+    @Test
+    fun detectedByAiDipertahankanDariCloud() = runBlocking {
+        val dao = FakeChatMessageDao()
+
+        FirestoreSyncManager.upsertMessage(
+            dao,
+            CloudMessage(cloudId = "m-ai", sender = "Suami", messageText = "beli kopi 20rb",
+                timestamp = 50, detectedBy = "AI")
+        )
+
+        assertEquals("AI", dao.getByCloudId("m-ai")?.detectedBy)
     }
 
     @Test

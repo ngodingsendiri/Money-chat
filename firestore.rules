@@ -66,10 +66,14 @@ service cloud.firestore {
     //   - create/update hanya jika keluarga benar-benar ADA (exists()),
     //   - dan (kecuali owner) pemohon BELUM menjadi anggota — mencegah request
     //     ulang berulang / duplikasi.
-    // M6 (audit): batas laju — tidak ada request duplikat dari UID yang sama
-    // (dokumen id = uid, create ditolak bila member/request atas UID itu sudah ada).
-    // Pemohon yang ingin request ulang cukup update dokumennya sendiri, yang tetap
-    // dijaga oleh batasan 1-per-asal. Owner tidak dibatasi.
+    // M6 (audit): batas laju sisi server —
+    //   - `requestedAt` wajib berada di jendela wajar relatif `request.time`
+    //     (maks ~24 jam lalu) sehingga pemohon tidak bisa mengirim timestamp
+    //     palsu/time-travel untuk melewati cooldown;
+    //   - request ulang (update) oleh pemohon sendiri dibatasi minimal 5 menit
+    //     sejak permintaan sebelumnya (dibandingkan via resource.data.requestedAt);
+    //     owner tidak dibatasi. Ini melengkapi PinAttemptLimiter sisi klien
+    //     (yang hanyabisa di-bypass di sisi server).
     match /families/{familyId}/joinRequests/{uid} {
       allow create: if signedInGoogle()
         && request.auth.uid == uid
@@ -77,9 +81,15 @@ service cloud.firestore {
         && !isMember(familyId)
         && !exists(/databases/$(database)/documents/families/$(familyId)/joinRequests/$(request.auth.uid))
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.requestedAt is number;
+        && request.resource.data.requestedAt is number
+        && request.resource.data.requestedAt <= request.time.toMillis()
+        && request.resource.data.requestedAt >= request.time.toMillis() - 90000000;
       allow update: if signedInGoogle()
-        && (request.auth.uid == uid || isOwner(familyId));
+        && (isOwner(familyId)
+            || (request.auth.uid == uid
+                && request.resource.data.requestedAt is number
+                && resource.data.requestedAt is number
+                && request.resource.data.requestedAt >= resource.data.requestedAt + 300000));
       allow delete: if signedInGoogle() && (request.auth.uid == uid || isOwner(familyId));
       allow read: if signedInGoogle() && (request.auth.uid == uid || isOwner(familyId));
     }

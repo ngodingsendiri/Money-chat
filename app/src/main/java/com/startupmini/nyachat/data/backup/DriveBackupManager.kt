@@ -186,7 +186,10 @@ object DriveBackupManager : DriveBackupApi {
             )
         }
 
-    /** Hapus backup lama — sisakan hanya yang terbaru (keep). */
+    /** Hapus backup lama — sisakan hanya yang terbaru (keep).
+     *  L8: error per file sebelumnya ditelan runCatching; kini diagregasi &
+     *  dilaporkan — kalau ada yang gagal dihapus, hasilnya Failure supaya
+     *  backup lama tidak menumpuk diam-diam. */
     override suspend fun pruneOldBackups(context: Context, token: String, keep: Int): BackupResult<Unit> {
         val filesResult = listBackups(context, token)
         return when (filesResult) {
@@ -194,17 +197,23 @@ object DriveBackupManager : DriveBackupApi {
                 val files = filesResult.value
                 if (files.size <= keep) BackupResult.Success(Unit)
                 else {
-                    files.drop(keep).forEach { file ->
+                    val failed = files.drop(keep).mapNotNull { file ->
                         runCatching {
                             val req = Request.Builder()
                                 .url("$API_FILES/${file.fileId}")
                                 .addHeader("Authorization", bearer(token))
                                 .delete()
                                 .build()
-                            client.newCall(req).execute().close()
-                        }
+                            client.newCall(req).execute().use { resp ->
+                                check(resp.isSuccessful) { "HTTP ${resp.code}" }
+                            }
+                        }.exceptionOrNull()
                     }
-                    BackupResult.Success(Unit)
+                    if (failed.isEmpty()) BackupResult.Success(Unit)
+                    else BackupResult.Failure(
+                        "Gagal menghapus ${failed.size} backup lama (${failed.first().message})",
+                        failed.first()
+                    )
                 }
             }
             is BackupResult.Failure, is BackupResult.NotFound, is BackupResult.QuotaExceeded, is BackupResult.ConsentRequired -> filesResult

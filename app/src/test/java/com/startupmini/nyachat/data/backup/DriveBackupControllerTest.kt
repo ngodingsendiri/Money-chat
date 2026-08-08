@@ -278,13 +278,29 @@ class DriveBackupControllerTest {
     }
 
     @Test
-    fun silentBackupDilewatiSaatEnkripsiAktif() = runTest {
+    fun silentBackupTerenkripsiDipakaiAutoPassphrase() = runTest {
         val api = FakeDriveApi()
         val controller = newController(api, this)
         controller.getEncryptionEnabled = { true }
+        // M5: auto-passphrase dari Keystore dipakai — auto-backup TETAP jalan
+        // walau enkripsi aktif (sebelumnya dilewati → backup 24 jam hilang).
+        controller.getAutoPassphrase = { "auto-passphrase-keystore" }
+        controller.buildBackupJson = { """{"app":"Nyachat","format":1}""" }
 
-        // Enkripsi butuh passphrase interaktif — auto-backup tidak menyimpan
-        // passphrase, jadi dilewati (bukan bikin backup tanpa enkripsi).
+        assertTrue(controller.silentBackup())
+        assertEquals(1, api.uploadCalls)
+        // Isi yang diupload harus berupa envelope terenkripsi (bukan plaintext).
+        assertTrue(api.lastJson != null && BackupCrypto.isEncryptedEnvelope(api.lastJson!!))
+    }
+
+    @Test
+    fun silentBackupTanpaAutoPassphraseDilewati() = runTest {
+        val api = FakeDriveApi()
+        val controller = newController(api, this)
+        controller.getEncryptionEnabled = { true }
+        // Tidak ada auto-passphrase (SecureStorage gagal) → tidak ada backup.
+        controller.getAutoPassphrase = { null }
+
         assertFalse(controller.silentBackup())
         assertEquals(0, api.uploadCalls)
     }

@@ -45,7 +45,12 @@ data class CloudMessage(
     val detectedType: String? = null,
     val replyToSender: String? = null,
     val replyToText: String? = null,
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    // M7: asal deteksi — "AI" atau "HEURISTIK" (fallback offline).
+    val detectedBy: String? = null,
+    // M4: waktu terakhir ditulis di server Firestore (milis) — basis tie-break
+    // deterministik yang imun terhadap selisih jam antar-perangkat.
+    val serverUpdatedAt: Long? = null
 )
 
 /** Representasi dokumen Firestore untuk transaksi. */
@@ -59,7 +64,9 @@ data class CloudTransaction(
     val timestamp: Long = 0L,
     val chatMessageId: Long? = null,
     val editedAt: Long? = null,
-    val sourceMessageCloudId: String? = null // Cross-device lookup key
+    val sourceMessageCloudId: String? = null, // Cross-device lookup key
+    // M4: waktu terakhir ditulis di server Firestore (milis) — tie-break deterministik.
+    val serverUpdatedAt: Long? = null
 )
 
 /** Status sinkronisasi nyata untuk indikator UI (P2-16). */
@@ -281,7 +288,11 @@ object FirestoreSyncManager {
             scope.launch {
                 val dao = chatDao ?: return@launch
                 for (change in snapshot.documentChanges) {
+                    // M4: serverUpdatedAt ditulis server (serverTimestamp) — baca
+                    // eksplisit karena toObject tidak memetakan Timestamp ke Long.
+                    val serverMs = change.document.getTimestamp("serverUpdatedAt")?.toDate()?.time
                     val cloud = change.document.toObject(CloudMessage::class.java)
+                        .copy(serverUpdatedAt = serverMs)
                     try {
                         when (change.type) {
                             DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED ->
@@ -323,7 +334,10 @@ object FirestoreSyncManager {
             scope.launch {
                 val dao = transDao ?: return@launch
                 for (change in snapshot.documentChanges) {
+                    // M4: serverUpdatedAt ditulis server — baca eksplisit (anggap server wall clock).
+                    val serverMs = change.document.getTimestamp("serverUpdatedAt")?.toDate()?.time
                     val cloud = change.document.toObject(CloudTransaction::class.java)
+                        .copy(serverUpdatedAt = serverMs)
                     try {
                         when (change.type) {
                             DocumentChange.Type.ADDED, DocumentChange.Type.MODIFIED ->
@@ -360,17 +374,63 @@ object FirestoreSyncManager {
      */
     internal fun effectiveSortTime(editedAt: Long?, timestamp: Long): Long = editedAt ?: timestamp
 
+    /**
+     * M4 — tie-break deterministik berbasis waktu SERVER.
+     *
+     * Klien menulis `serverUpdatedAt = FieldValue.serverTimestamp()` setiap sync,
+     * sehingga perbandingan konflik tidak lagi bergantung murni pada jam lokal
+     * (yang bisa selisih antar-perangkat → edit "baru" bisa tampak "tua").
+     * Aturan:
+     *  1) Dua-duanya punya serverUpdatedAt  → bandingkan waktu server (menang yang
+     *     akhir ditulis ke server; sama-sama → terima cloud agar konvergen).
+     *  2) Minimal satu sisi belum punya (data lama / belum pernah sync) → fallback
+     *     ke waktu lokal (perilaku lama, kompatibel dengan data migrasi v10-).
+     */
+    internal fun cloudIsNewer(
+        existingEditedAt: Long?,
+        existingTimestamp: Long,
+        existingServerUpdatedAt: Long?,
+        cloudEditedAt: Long?,
+        cloudTimestamp: Long,
+        cloudServerUpdatedAt: Long?
+    ): Boolean {
+        val localServer = existingServerUpdatedAt
+        val cloudServer = cloudServerUpdatedAt
+        if (localServer != null && cloudServer != null) {
+            if (cloudServer < localServer) return false
+            if (cloudServer > localServer) return true
+            // Server time sama → pemutus deterministik ke waktu efektif (terima
+            // cloud bila tidak lebih tua) supaya dua perangkat berakhir konsisten.
+            return effectiveSortTime(cloudEditedAt, cloudTimestamp) >=
+                effectiveSortTime(existingEditedAt, existingTimestamp)
+        }
+        return effectiveSortTime(cloudEditedAt, cloudTimestamp) >=
+            effectiveSortTime(existingEditedAt, existingTimestamp)
+    }
+
+    internal fun cloudIsNewer(existing: ChatMessage, c: CloudMessage): Boolean =
+        cloudIsNewer(
+            existing.editedAt, existing.timestamp, existing.serverUpdatedAt,
+            c.editedAt, c.timestamp, c.serverUpdatedAt
+        )
+
+    internal fun cloudIsNewer(existing: FinancialTransaction, c: CloudTransaction): Boolean =
+        cloudIsNewer(
+            existing.editedAt, existing.timestamp, existing.serverUpdatedAt,
+            c.editedAt, c.timestamp, c.serverUpdatedAt
+        )
+
     internal suspend fun upsertMessage(dao: ChatMessageDao, c: CloudMessage) {
         val existing = dao.getByCloudId(c.cloudId)
         if (existing != null) {
             // Last-writer-by-time: snapshot listener bisa tiba dalam urutan apa
             // pun, jadi versi cloud yang lebih tua tidak boleh menimpa edit
-            // lokal yang lebih baru. Waktu sama → terima (data konvergen).
-            val localTime = effectiveSortTime(existing.editedAt, existing.timestamp)
-            val cloudTime = effectiveSortTime(c.editedAt, c.timestamp)
-            if (cloudTime < localTime) return
+            // lokal yang lebih baru. M4: kalau kedua sisi sudah punya waktu SERVER
+            // (serverUpdatedAt), bandingkan itu dulu — imun terhadap selisih jam
+            // antar-perangkat; kalau belum (data lama), jatuh ke waktu lokal.
+            if (!cloudIsNewer(existing, c)) return
         }
-        val local = if (existing != null) {
+val local = if (existing != null) {
             ChatMessage(
                 id = existing.id,
                 sender = c.sender,
@@ -383,6 +443,8 @@ object FirestoreSyncManager {
                 replyToSender = c.replyToSender,
                 replyToText = c.replyToText,
                 editedAt = c.editedAt,
+                detectedBy = c.detectedBy,
+                serverUpdatedAt = c.serverUpdatedAt,
                 // Lampiran (imagePath/filePath/fileName) TIDAK dikirim ke cloud —
                 // file hanya ada di perangkat yang mengirimnya. Pertahankan path
                 // lokal supaya bubble foto nota/dokumen tidak hilang saat listener
@@ -404,6 +466,8 @@ object FirestoreSyncManager {
                 replyToSender = c.replyToSender,
                 replyToText = c.replyToText,
                 editedAt = c.editedAt,
+                detectedBy = c.detectedBy,
+                serverUpdatedAt = c.serverUpdatedAt,
                 cloudId = c.cloudId
             )
         }
@@ -414,10 +478,9 @@ object FirestoreSyncManager {
         val existing = dao.getByCloudId(c.cloudId)
         if (existing != null) {
             // Sama dengan upsertMessage — konflik edit transaksi dua perangkat
-            // diselesaikan berbasis waktu edit, bukan urutan listener.
-            val localTime = effectiveSortTime(existing.editedAt, existing.timestamp)
-            val cloudTime = effectiveSortTime(c.editedAt, c.timestamp)
-            if (cloudTime < localTime) return
+            // diselesaikan berbasis waktu edit, bukan urutan listener. M4: waktu
+            // server (serverUpdatedAt) diprioritaskan bila tersedia di dua sisi.
+            if (!cloudIsNewer(existing, c)) return
         }
         val local = if (existing != null) {
             FinancialTransaction(
@@ -431,7 +494,8 @@ object FirestoreSyncManager {
                 editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
                 cloudId = c.cloudId,
-                sourceMessageCloudId = c.sourceMessageCloudId
+                sourceMessageCloudId = c.sourceMessageCloudId,
+                serverUpdatedAt = c.serverUpdatedAt
             )
         } else {
             FinancialTransaction(
@@ -444,7 +508,8 @@ object FirestoreSyncManager {
                 editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
                 cloudId = c.cloudId,
-                sourceMessageCloudId = c.sourceMessageCloudId
+                sourceMessageCloudId = c.sourceMessageCloudId,
+                serverUpdatedAt = c.serverUpdatedAt
             )
         }
         dao.insertTransaction(local)
@@ -486,7 +551,12 @@ object FirestoreSyncManager {
                     "detectedType" to message.detectedType,
                     "replyToSender" to message.replyToSender,
                     "replyToText" to message.replyToText,
-                    "editedAt" to message.editedAt
+                    "editedAt" to message.editedAt,
+                    "detectedBy" to message.detectedBy,
+                    // M4: penanda waktu SERVER — sampai di sini setiap perubahan
+                    // di-push, sehingga konflik di-resolve pakai jam Firestore
+                    // (deterministik) bukan jam perangkat.
+                    "serverUpdatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
             true
@@ -532,7 +602,10 @@ object FirestoreSyncManager {
                     "timestamp" to transaction.timestamp,
                     "editedAt" to transaction.editedAt,
                     "chatMessageId" to transaction.chatMessageId,
-                    "sourceMessageCloudId" to transaction.sourceMessageCloudId
+                    "sourceMessageCloudId" to transaction.sourceMessageCloudId,
+                    // M4: penanda waktu SERVER — resolusi konflik deterministik lintas
+                    // perangkat tanpa bergantung kalibrasi jam lokal.
+                    "serverUpdatedAt" to FieldValue.serverTimestamp()
                 )
             ).await()
             true

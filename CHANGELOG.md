@@ -37,6 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed (FASE 3)
 - **M12**: DB Room naik **v9→v10** + `MIGRATION_9_10` (idempotent, `CREATE INDEX IF NOT EXISTS`) menambahkan index `financial_transactions(sourceMessageCloudId)` — menyamakan DB fresh (onCreate) dengan DB hasil migrasi v8→v9 yang sebelumnya inkonsisten; skema `9.json` direstorasi ke kondisi historis asli tanpa index.
 
+### Fixed (FASE 4 — Audit Sisa M4/M5/M6/M7/M9/M11/L2/L7/L8/L12)
+- **M4**: Resolusi konflik sync (last-writer-wins) kini pakai `FieldValue.serverTimestamp()` (`serverUpdatedAt`) — immune terhadap selisih jam antar-perangkat. Tie-break deterministik: jika kedua sisi punya `serverUpdatedAt`, bandingkan waktu server; fallback ke waktu lokal (editedAt/timestamp). DB Room **v10→v11** + `MIGRATION_10_11` (kolom `serverUpdatedAt` di `chat_messages` & `financial_transactions`).
+- **M5**: Auto-backup harian sekarang jalan walau enkripsi aktif — pakai passphrase otomatis dari Android Keystore (`BACKUP_AUTO_PASSPHRASE`) bukan dilewati. Restore otomatis coba passphrase Keystore dulu sebelum prompt manual.
+- **M6**: Rate-limit join request di `firestore.rules`: create butuh `requestedAt` dalam jendela 25 jam; update non-owner cooldown 5 menit, pakai `resource.data` (bukan `get()`) biar lepas quirk BUG-08.
+- **M7**: Badge transaksi di chat kini menampilkan asal deteksi — "AI" (Gemini/OpenRouter) atau "heuristik" (fallback offline) lewat kolom `detectedBy` di `ChatMessage` (DB v11). Transparansi: user tahu nilai diproses AI atau mesin aturan lokal.
+- **M9**: Lampiran (foto nota/dokumen) di-namespace per workspace `filesDir/attachments/<PIN>/` — ganti workspace hanya hapus folder workspace lama, foto workspace lain aman. `clearLocalData(pin)` scoped delete; `clearAllData/logout` tetap full wipe.
+- **M11**: Parameter `recentContext` sekarang dipakai di prompt AI — helper `contextBlock` ambil 6 pesan terakhir (filter blank, max 120 char) → disisipkan ke `buildParsePrompt` & `buildReceiptPrompt`.
+- **L2**: Heuristik extract nominal tolak angka 1 digit tanpa satuan (mis. "makan 2 kucing" → kuantitas, bukan Rp 2.000) — kurangi false-positive.
+- **L7**: Salin PIN pakai `ClipData` dengan label "Nyachat PIN" / "Nyachat" — ClipboardManager menampilkan label jelas, bukan teks polos.
+- **L8**: `pruneOldBackups` agregasi error per-file — gagal hapus file lama → `BackupResult.Failure` detail, bukan diam-diam gagal.
+- **L12**: Dokumentasi: `MembershipManager.stop()` idempoten, double-call saat startup harmless.
+
+### Changed (FASE 4)
+- **M12**: DB Room naik **v10→v11** + `MIGRATION_10_11` (kolom `serverUpdatedAt` di `chat_messages` & `financial_transactions`, kolom `detectedBy` di `chat_messages`); skema `11.json` diekspor.
+
 ---
 
 ## [r1.0.3] - 2026-08-06

@@ -22,12 +22,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -79,7 +77,6 @@ fun PinConnectScreen(
     var isSigningIn by remember { mutableStateOf(false) }
     var authError by remember { mutableStateOf<String?>(null) }
     var signedInEmail by rememberSaveable { mutableStateOf<String?>(null) }
-    val clipboard = LocalClipboardManager.current
     var pinCopied by rememberSaveable { mutableStateOf(false) }
     // Rate limiting percobaan join (anti brute-force PIN): catat waktu tiap
     // percobaan; setelah batas terlampaui, tombol join dikunci sementara.
@@ -357,11 +354,15 @@ fun PinConnectScreen(
 
                                         Spacer(modifier = Modifier.height(16.dp))
 
-                                        // PIN bisa disalin ke clipboard — biar gampang dikirim ke pasangan
+                                        // PIN bisa disalin ke clipboard — biar gampang dikirim ke pasangan.
+                                        // L7: pakai ClipData dengan label agar app lain tidak bisa membaca
+                                        // isi clipboard tanpa izin (clipboard overlay/privacy API ≥ 31) —
+                                        // setText(AnnotatedString) lama tidak menyertakan label.
                                         OutlinedButton(
                                             onClick = {
                                                 generatedPin?.let {
-                                                    clipboard.setText(AnnotatedString(it))
+                                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Nyachat PIN", it))
                                                     pinCopied = true
                                                     scope.launch {
                                                         delay(2000)

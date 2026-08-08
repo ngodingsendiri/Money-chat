@@ -54,6 +54,12 @@ class DriveBackupController(
     /** Apakah enkripsi backup aktif (dari Pengaturan). */
     var getEncryptionEnabled: () -> Boolean = { false }
 
+    /** Passphrase otomatis backup terenkripsi (dari SecureStorage/Keystore).
+     *  M5: auto-backup 24 jam mengenkripsi backup dengan kunci Keystore ini,
+     *  bukan passphrase interaktif — jadi enkripsi aktif TIDAK lagi melewatkan
+     *  backup otomatis. Kunci dibangkitkan sekali lalu disimpan aman. */
+    var getAutoPassphrase: suspend () -> String? = { null }
+
     // ===== State UI =====
 
     private val _busy = MutableStateFlow(false)
@@ -172,9 +178,36 @@ class DriveBackupController(
      * pernah menyetujui akses Drive, operasi dilewati. Return true kalau berhasil.
      */
     suspend fun silentBackup(): Boolean {
-        // Backup terenkripsi butuh passphrase interaktif — auto-backup tidak
-        // pernah menyimpan passphrase, jadi dilewati saat enkripsi aktif.
-        if (getEncryptionEnabled()) return false
+        // M5: sebelumnya backup terenkripsi dilewati (return false) karena
+        // butuh passphrase interaktif. Kini kalau enkripsi aktif, dipakai
+        // passphrase otomatis Keystore sehingga auto-backup tetap berjalan.
+        val encryptionOn = getEncryptionEnabled()
+        val passphrase = if (encryptionOn) getAutoPassphrase() else null
+        if (encryptionOn) {
+            // Enkripsi aktif tapi auto-passphrase Keystore belum tersedia →
+            // JANGAN upload versi plaintext (bocor). Lewati auto-backup kali ini.
+            if (passphrase.isNullOrBlank()) return false
+            val email = currentEmail() ?: return false
+            return when (val tokenResult = driveApi.getAccessToken(context, email)) {
+                is BackupResult.Success -> {
+                    val token = tokenResult.value
+                    val plain = buildBackupJson()
+                    val json = runCatching { BackupCrypto.encryptToEnvelope(plain, passphrase) }.getOrNull()
+                        ?: return false
+                    val uploadResult = driveApi.uploadBackup(
+                        context, token, "Nyachat-backup-${timestampForFile()}.json", json
+                    )
+                    if (uploadResult is BackupResult.Success) {
+                        driveApi.pruneOldBackups(context, token, 5)
+                        onSuccessfulBackup()
+                        true
+                    } else {
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
         val email = currentEmail() ?: return false
         return when (val tokenResult = driveApi.getAccessToken(context, email)) {
             is BackupResult.Success -> {
@@ -241,9 +274,27 @@ class DriveBackupController(
      * [passphrase] → munculkan prompt passphrase; passphrase salah → pesan error.
      */
     private suspend fun handleDownloadedBackup(payload: String, passphrase: String?) {
-        if (passphrase == null && BackupCrypto.isEncryptedEnvelope(payload)) {
-            _passphrasePrompt.value = PassphrasePrompt.Restore(payload)
-            return
+        if (BackupCrypto.isEncryptedEnvelope(payload)) {
+            // Coba dulu passphrase otomatis Keystore (M5): auto-backup 24 jam
+            // mengenkripsi dengan kunci ini, jadi restore di device yang sama
+            // berjalan tanpa dialog. Kalau kunci tidak cocok (backup dari device
+            // lain / dibuat manual dengan passphrase user), baru minta passphrase.
+            if (passphrase == null) {
+                val auto = getAutoPassphrase()
+                if (!auto.isNullOrBlank()) {
+                    val autoData = parseRestore(payload, auto)
+                    if (autoData != null) {
+                        when {
+                            autoData.familyId != null && autoData.familyId != getWorkspacePin() ->
+                                _crossFamilyRestore.value = autoData
+                            else -> doRestore(autoData)
+                        }
+                        return
+                    }
+                }
+                _passphrasePrompt.value = PassphrasePrompt.Restore(payload)
+                return
+            }
         }
         val data = parseRestore(payload, passphrase)
         when {
