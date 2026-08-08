@@ -22,5 +22,6 @@ data class FinancialTransaction(
     val timestamp: Long = System.currentTimeMillis(),
     val editedAt: Long? = null, // timestamp terakhir diedit (null = belum pernah); dasar resolusi konflik sync berbasis waktu
     val chatMessageId: Long? = null,
-    val cloudId: String? = null // ID dokumen Firestore (unik lintas perangkat)
+    val cloudId: String? = null, // ID dokumen Firestore (unik lintas perangkat)
+    val sourceMessageCloudId: String? = null // Cloud ID pesan chat asal (untuk cross-device lookup)
 )

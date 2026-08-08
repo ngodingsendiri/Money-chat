@@ -25,7 +25,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -34,7 +33,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.only
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +48,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
@@ -98,8 +97,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.invisibleToUser
@@ -227,34 +224,6 @@ class MainActivity : ComponentActivity() {
                             duration = if (onAction != null) SnackbarDuration.Long else SnackbarDuration.Short
                         )
                         if (result == SnackbarResult.ActionPerformed) onAction?.invoke()
-                    }
-                }
-
-                // Audit #6: saat koneksi Firestore pulih dari OFFLINE/ERROR, tampilkan
-                // Snackbar singkat supaya user tahu indikator tidak lagi macet merah/kuning.
-                LaunchedEffect(Unit) {
-                    com.startupmini.nyachat.data.remote.FirestoreSyncManager.recoveryEvents.collect { msg ->
-                        showSnack(msg, null, null)
-                    }
-                }
-
-                // Audit #2: foto profil lokal per pengguna. State avatarPath di-refresh
-                // dari AvatarStore — diupdate setelah memilih foto via launcher.
-                var avatarPath by remember {
-                    mutableStateOf(
-                        userName?.let { com.startupmini.nyachat.data.local.AvatarStore.getAvatarPath(context, it) }
-                    )
-                }
-                val avatarPickerLauncher = rememberLauncherForActivityResult(
-                    ActivityResultContracts.GetContent()
-                ) { uri ->
-                    val name = userName
-                    if (uri != null && name != null) {
-                        scope.launch {
-                            val path = com.startupmini.nyachat.data.local.AvatarStore.saveAvatar(context, name, uri)
-                            if (path != null) avatarPath = path
-                            else showSnack(context.getString(R.string.avatar_save_failed), null, null)
-                        }
                     }
                 }
 
@@ -502,24 +471,33 @@ class MainActivity : ComponentActivity() {
                             CircularProgressIndicator()
                         }
                     } else if (workspacePin == null || userName == null || !firebaseReady) {
-                        if (connectGate == null) {
-                            // F2 (audit focus order): saat gate keanggotaan aktif (connectGate),
-                            // layar PIN TIDAK dikomposisikan sama sekali (bukan cuma ditandai
-                            // invisibleToUser) — mencegah tombol "Masuk" berkedip / terlihat di
-                            // balik gate semi-transparan saat transisi (audit #1).
+                        // F2 (audit focus order): saat gate keanggotaan aktif (connectGate),
+                        // background layar PIN ditandai invisibleToUser() supaya TalkBack &
+                        // fokus keyboard tidak menjangkau elemen di balik gate.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (connectGate != null) {
+                                        Modifier.semantics { invisibleToUser() }
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                        ) {
                             com.startupmini.nyachat.ui.screens.PinConnectScreen(
                                 onPinConnected = { pin, role, name ->
-                                    val previous = workspacePin
-                                    if (previous != null && previous != pin) {
-                                        // PIN berbeda → isolasi workspace: konfirmasi dulu
-                                        // sebelum menghapus data lokal workspace lama.
-                                        pendingPinConnect = Triple(pin, role, name)
-                                    } else {
-                                        // Melewati gate keanggotaan dulu sebelum masuk.
-                                        connectGate = Triple(pin, role, name)
-                                    }
+                                val previous = workspacePin
+                                if (previous != null && previous != pin) {
+                                    // PIN berbeda → isolasi workspace: konfirmasi dulu
+                                    // sebelum menghapus data lokal workspace lama.
+                                    pendingPinConnect = Triple(pin, role, name)
+                                } else {
+                                    // Melewati gate keanggotaan dulu sebelum masuk.
+                                    connectGate = Triple(pin, role, name)
                                 }
-                            )
+                            }
+                        )
                         }
                     } else {
                         // F1 (audit focus order): Scaffold M3 mengkomposisikan fokus
@@ -641,9 +619,14 @@ class MainActivity : ComponentActivity() {
                                             onAskAiClicked = { viewModel.askAiInChat(it) },
                                             onDeleteMessage = { viewModel.deleteChatMessage(it) },
                                             onOpenTransaction = { msg ->
-                                                // Tap badge finansial (item 5): cari transaksi
-                                                // terkait via chatMessageId lalu buka dialog edit.
-                                                val tx = transactions.find { it.chatMessageId == msg.id }
+                                                // Tap badge finansial (item 5): cari transaksi terkait lalu
+                                                // buka dialog edit. Cross-device: di perangkat lain, id lokal
+                                                // Room berbeda sehingga fallback chatMessageId gagal. Transaksi
+                                                // menyimpan sourceMessageCloudId = cloudId pesan asal → cari
+                                                // transaksi dengan sourceMessageCloudId == cloudId pesan kamu.
+                                                val tx = msg.cloudId?.let { msgCloudId ->
+                                                    transactions.find { it.sourceMessageCloudId == msgCloudId }
+                                                } ?: transactions.find { it.chatMessageId == msg.id }
                                                 if (tx != null) {
                                                     editTarget = tx
                                                     showAddDialog = true
@@ -761,9 +744,7 @@ class MainActivity : ComponentActivity() {
                                     onLogout = {
                                         showSettingsSheet = false
                                         showLogoutDialog = true
-                                    },
-                                    avatarPath = avatarPath,
-                                    onPickAvatar = { avatarPickerLauncher.launch("image/*") }
+                                    }
                                 )
                             }
 
@@ -795,7 +776,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-if (showPinDialog) {
+                            if (showPinDialog) {
                                 AlertDialog(
                                     onDismissRequest = { showPinDialog = false },
                                     icon = { Icon(imageVector = Icons.Rounded.Pin, contentDescription = null) },
@@ -1219,25 +1200,17 @@ if (showPinDialog) {
                         )
                     }
 
-                    // Snackbar overlay (audit P1.1): tampil di semua layar. Saat
-                    // keyboard (IME) terbuka, snackbar TIDAK boleh menimpa kolom
-                    // input chat — host dipindah ke atas (di bawah status bar).
-                    // Saat keyboard tertutup, kembali ke bawah di atas NavigationBar
-                    // (menggantikan angka 96dp hardcoded). Akses bar tak pernah diblokir.
-                    val keyboardVisible = WindowInsets.isImeVisible
+                    // Snackbar overlay (audit P1.1): tampil di semua layar. Offset
+                    // adaptif: windowInsetsPadding(ime) mengangkat host di atas
+                    // keyboard saat IME terbuka (navbar otomatis tersembunyi & konten
+                    // melebar ke bawah); tanpa IME cukup 16dp di atas NavigationBar —
+                    // menggantikan angka 96dp hardcoded.
                     SnackbarHost(
                         hostState = snackbarHostState,
                         modifier = Modifier
-                            .align(if (keyboardVisible) Alignment.TopCenter else Alignment.BottomCenter)
-                            .windowInsetsPadding(
-                                if (keyboardVisible) {
-                                    WindowInsets.statusBars.only(WindowInsetsSides.Top)
-                                } else {
-                                    WindowInsets.ime.only(WindowInsetsSides.Bottom)
-                                }
-                            )
-                            .padding(top = if (keyboardVisible) 72.dp else 0.dp)  // 72dp clears TopAppBar (56-64dp) + status bar
-                            .padding(bottom = if (keyboardVisible) 0.dp else 16.dp)
+                            .align(Alignment.BottomCenter)
+                            .windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
+                            .padding(bottom = 16.dp)
                     )
                         }
 
@@ -1253,11 +1226,11 @@ if (showPinDialog) {
                     enter = slideInVertically(initialOffsetY = { it }, animationSpec = tween(220)) + fadeIn(animationSpec = tween(220)),
                     exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(220)) + fadeOut(animationSpec = tween(220))
                 ) {
+                    val keyboardController = LocalSoftwareKeyboardController.current
                     NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)) {
                         NavigationBarItem(
                             selected = selectedTab == 0,
                             onClick = {
-                                val keyboardController = LocalSoftwareKeyboardController.current
                                 keyboardController?.hide()
                                 selectedTab = 0
                             },
@@ -1271,10 +1244,9 @@ if (showPinDialog) {
                             modifier = Modifier.testTag("tab_chat")
                         )
 
-                    NavigationBarItem(
+                        NavigationBarItem(
                             selected = selectedTab == 1,
                             onClick = {
-                                val keyboardController = LocalSoftwareKeyboardController.current
                                 keyboardController?.hide()
                                 selectedTab = 1
                             },
@@ -1431,33 +1403,28 @@ private fun StackedAvatars(
             // Teks adaptif (audit WCAG): inisial gelap saat bg avatar terang (orange/sky/
             // hijau — putih hanya ~2.3-3:1), putih saat bg gelap (indigo/ungu/crimson).
             val fgColor = if (avatarColor.luminance() > 0.22f) Color(0xFF202124) else Color.White
-            val context = LocalContext.current
-            // Audit #2: foto profil bila ada; selain itu lingkaran inisial berwarna.
-            val photoPath = com.startupmini.nyachat.data.local.AvatarStore.getAvatarPath(context, name)
             Box(
                 modifier = Modifier
                     .size(avatarSize.dp)
                     .offset(x = (index * (avatarSize - overlapDp)).dp)
                     .zIndex((show.size - index).toFloat())
+                    .clip(CircleShape)
+                    .drawBehind { drawCircle(color = avatarColor) },
+                contentAlignment = Alignment.Center
             ) {
-                com.startupmini.nyachat.ui.util.AvatarImage(
-                    name = name,
-                    size = avatarSize,
-                    photoPath = photoPath,
-                    backgroundColor = avatarColor,
-                    textColor = fgColor,
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontSize = (avatarSize / 2.8).sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.matchParentSize()
-                )
-                // Border ring tipis agar avatar bertumpuk terpisah jelas.
+                // White border ring
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .size(avatarSize.dp)
                         .clip(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = 0.55f), CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+                Text(
+                    text = initials,
+                    color = fgColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = (avatarSize / 2.8).sp,
+                    maxLines = 1
                 )
             }
         }

@@ -212,6 +212,7 @@ object DataExporter {
             .putOpt("editedAt", t.editedAt)
             .putOpt("chatMessageId", t.chatMessageId)
             .putOpt("cloudId", t.cloudId)
+            .putOpt("sourceMessageCloudId", t.sourceMessageCloudId)
 
     /** Serialisasi pesan → JSON (dipakai untuk backup & antrian sync). */
     internal fun messageToJson(m: ChatMessage): JSONObject =
@@ -230,6 +231,7 @@ object DataExporter {
             .putOpt("replyToText", m.replyToText)
             .putOpt("editedAt", m.editedAt)
             .putOpt("cloudId", m.cloudId)
+            .putOpt("sourceMessageCloudId", m.sourceMessageCloudId)
 
     /** Parse transaksi dari JSON. */
     internal fun transactionFromJson(o: JSONObject): FinancialTransaction =
@@ -242,7 +244,8 @@ object DataExporter {
             timestamp = o.optLong("timestamp", 0L),
             editedAt = o.optNullableLong("editedAt"),
             chatMessageId = o.optNullableLong("chatMessageId"),
-            cloudId = o.optNullableString("cloudId")
+            cloudId = o.optNullableString("cloudId"),
+            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId")
         )
 
     /** Parse pesan dari JSON (lampiran lokal yang filenya sudah hilang dibuang). */
@@ -265,7 +268,8 @@ object DataExporter {
             replyToSender = o.optNullableString("replyToSender"),
             replyToText = o.optNullableString("replyToText"),
             editedAt = o.optNullableLong("editedAt"),
-            cloudId = o.optNullableString("cloudId")
+            cloudId = o.optNullableString("cloudId"),
+            sourceMessageCloudId = o.optNullableString("sourceMessageCloudId")
         )
     }
 

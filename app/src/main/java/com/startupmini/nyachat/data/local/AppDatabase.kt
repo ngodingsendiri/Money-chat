@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [ChatMessage::class, FinancialTransaction::class, PendingOp::class],
-    version = 8,
+    version = 9,
     // Skema diekspor ke app/schemas (room.schemaLocation di build.gradle.kts)
     // supaya sejarah migrasi bisa direview di code review.
     exportSchema = true
@@ -93,6 +93,15 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // v8 -> v9: tambah sourceMessageCloudId untuk cross-device relasi
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE financial_transactions ADD COLUMN sourceMessageCloudId TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_financial_transactions_sourceMessageCloudId ON financial_transactions(sourceMessageCloudId)")
+                db.execSQL("ALTER TABLE chat_messages ADD COLUMN sourceMessageCloudId TEXT")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -100,7 +109,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "keuangan_pasutri_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build()
                 INSTANCE = instance
                 instance

@@ -58,7 +58,8 @@ data class CloudTransaction(
     val loggedBy: String = "",
     val timestamp: Long = 0L,
     val chatMessageId: Long? = null,
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    val sourceMessageCloudId: String? = null // Cross-device lookup key
 )
 
 /** Status sinkronisasi nyata untuk indikator UI (P2-16). */
@@ -429,7 +430,8 @@ object FirestoreSyncManager {
                 timestamp = c.timestamp,
                 editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
-                cloudId = c.cloudId
+                cloudId = c.cloudId,
+                sourceMessageCloudId = c.sourceMessageCloudId
             )
         } else {
             FinancialTransaction(
@@ -441,7 +443,8 @@ object FirestoreSyncManager {
                 timestamp = c.timestamp,
                 editedAt = c.editedAt,
                 chatMessageId = c.chatMessageId,
-                cloudId = c.cloudId
+                cloudId = c.cloudId,
+                sourceMessageCloudId = c.sourceMessageCloudId
             )
         }
         dao.insertTransaction(local)
@@ -528,7 +531,8 @@ object FirestoreSyncManager {
                     "loggedBy" to transaction.loggedBy,
                     "timestamp" to transaction.timestamp,
                     "editedAt" to transaction.editedAt,
-                    "chatMessageId" to transaction.chatMessageId
+                    "chatMessageId" to transaction.chatMessageId,
+                    "sourceMessageCloudId" to transaction.sourceMessageCloudId
                 )
             ).await()
             true

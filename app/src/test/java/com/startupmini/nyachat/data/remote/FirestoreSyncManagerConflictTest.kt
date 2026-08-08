@@ -72,6 +72,8 @@ class FirestoreSyncManagerConflictTest {
             store.values.firstOrNull { it.cloudId == cloudId }
         override suspend fun getByChatMessageId(chatMessageId: Long): FinancialTransaction? =
             store.values.firstOrNull { it.chatMessageId == chatMessageId }
+        override suspend fun getBySourceMessageCloudId(sourceMessageCloudId: String): FinancialTransaction? =
+            store.values.firstOrNull { it.sourceMessageCloudId == sourceMessageCloudId }
         override suspend fun deleteByCloudId(cloudId: String) {
             store.values.removeAll { it.cloudId == cloudId }
         }
@@ -212,7 +214,7 @@ class FirestoreSyncManagerConflictTest {
         assertEquals(250L, merged.editedAt)
     }
 
-    @Test
+@Test
     fun transaksiBaruDariCloudMenyimpanEditedAt() = runBlocking {
         val dao = FakeTransactionDao()
 
@@ -225,6 +227,42 @@ class FirestoreSyncManagerConflictTest {
         val saved = dao.getByCloudId("t-baru")!!
         assertEquals(5000000.0, saved.amount, 0.001)
         assertNull(saved.editedAt)
+    }
+
+    // ---------- Cross-device: relasi chat <-> transaksi lewat sourceMessageCloudId ----------
+
+    @Test
+    fun transaksiMergeDariCloudMempertahankanSourceMessageCloudId() = runBlocking {
+        val dao = FakeTransactionDao()
+
+        // Transaksi dibuat di perangkat lain (chat "beli kopi 20rb", message cloudId "msg-x").
+        FirestoreSyncManager.upsertTransaction(
+            dao,
+            CloudTransaction(cloudId = "t-1", type = "PENGELUARAN", category = "Makanan & Minuman",
+                amount = 20000.0, description = "beli kopi 20rb", loggedBy = "Suami",
+                timestamp = 100, editedAt = null, sourceMessageCloudId = "msg-x")
+        )
+
+        // Di perangkat ini, pesan asal punya cloudId SAMA ("msg-x") meski id lokal
+        // Room-nya beda. Lookup cross-device harus menemukan transaksinya.
+        val tx = dao.getBySourceMessageCloudId("msg-x")
+        assertEquals("t-1", tx?.cloudId)
+        assertEquals(20000.0, tx!!.amount, 0.001)
+    }
+
+    @Test
+    fun transaksiLokalSourceIdDitemukanViaCloudIdPesan() = runBlocking {
+        val dao = FakeTransactionDao()
+        dao.insertTransaction(
+            FinancialTransaction(
+                type = "PENGELUARAN", category = "Makanan & Minuman", amount = 20000.0,
+                description = "kopi", loggedBy = "Suami", timestamp = 100,
+                cloudId = "t-local", sourceMessageCloudId = "msg-lokal"
+            )
+        )
+        // Resolusi yang dipakai MainActivity: msg.cloudId == transaction.sourceMessageCloudId
+        val resolved = dao.store.values.firstOrNull { it.sourceMessageCloudId == "msg-lokal" }
+        assertEquals("t-local", resolved?.cloudId)
     }
 
     // ---------- Restore backup: diff dokumen cloud vs isi backup ----------

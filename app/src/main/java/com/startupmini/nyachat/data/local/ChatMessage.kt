@@ -24,5 +24,6 @@ data class ChatMessage(
     val replyToSender: String? = null, // snapshot pengirim pesan yang dibalas (balasan via swipe)
     val replyToText: String? = null, // snapshot isi pesan yang dibalas
     val editedAt: Long? = null, // timestamp terakhir diedit (null = belum pernah diedit)
-    val cloudId: String? = null // ID dokumen Firestore (unik lintas perangkat)
+    val cloudId: String? = null, // ID dokumen Firestore (unik lintas perangkat)
+    val sourceMessageCloudId: String? = null // Cloud ID pesan chat asal (untuk cross-device lookup)
 )

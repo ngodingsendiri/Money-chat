@@ -105,7 +105,8 @@ class FinanceRepository(
                     loggedBy = sender,
                     timestamp = System.currentTimeMillis(),
                     chatMessageId = msgId,
-                    cloudId = UUID.randomUUID().toString()
+                    cloudId = UUID.randomUUID().toString(),
+                    sourceMessageCloudId = finalMsg.cloudId // Cross-device lookup key
                 )
                 val txId = transactionDao.insertTransaction(trans)
                 createdTx = trans.copy(id = txId)
@@ -187,7 +188,8 @@ class FinanceRepository(
                         loggedBy = existing.sender,
                         timestamp = existing.timestamp,
                         chatMessageId = messageId,
-                        cloudId = UUID.randomUUID().toString()
+                        cloudId = UUID.randomUUID().toString(),
+                        sourceMessageCloudId = existing.cloudId // Cross-device lookup key
                     )
                     transactionDao.insertTransaction(trans)
                     FirestoreSyncManager.syncTransaction(trans)

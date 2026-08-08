@@ -213,6 +213,7 @@ fun ChatScreen(
     val coroutineScope = rememberCoroutineScope()
     var lastKnownCount by remember { mutableIntStateOf(-1) }
 
+    val inputFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     val takePictureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         val uri = cameraTempUri
@@ -610,21 +611,16 @@ fun ChatScreen(
                 )
             }
 
-            // Chat Input Box — Telegram-style floating pill (audit #8): bukan kotak
-            // menempel penuh. Margin tepi + sudut membulat + latar surfaceVariant membuat
-            // kolom input "mengambang" di atas daftar pesan (WhatsApp/Telegram style).
+            // Chat Input Box — Telegram-style: Plus | TextField (auto-expand) | Send
             Surface(
-                color = Color.Transparent,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp)
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.85f else 0.6f)
-                        )
+                        .padding(horizontal = 8.dp, vertical = 8.dp)
                         .animateContentSize(),
                     verticalAlignment = Alignment.Bottom
                 ) {
@@ -650,22 +646,18 @@ fun ChatScreen(
                         placeholder = {
                             Text(stringResource(R.string.chat_input_placeholder))
                         },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { sendMessage() }),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                        keyboardActions = KeyboardActions(onSend = { sendMessage() }),
                         modifier = Modifier
                             .weight(1f)
                             .testTag("chat_input_field")
-                            .onFocusChange { hasFocus: Boolean ->
-                                if (!hasFocus) {
-                                    // Keyboard dismissed, focus cleared
-                                }
-                            },
+                            .focusRequester(inputFocusRequester),
                         shape = RoundedCornerShape(24.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color.Transparent,
                             unfocusedBorderColor = Color.Transparent,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.8f else 0.5f)
                         ),
                         maxLines = 6,
                         minLines = 1,
@@ -686,7 +678,7 @@ fun ChatScreen(
                                     tint = askAiTint
                                 )
                             }
-                        )
+                        }
                     )
 
                     Spacer(modifier = Modifier.width(4.dp))
@@ -890,18 +882,9 @@ fun ChatScreen(
                             onValueChange = { if (it.length <= MAX_MESSAGE_LENGTH) editText = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .focusRequester(editFocusRequester)
-                                .onFocusChange { hasFocus: Boolean ->
-                                    if (!hasFocus) {
-                                        // Keyboard dismissed
-                                    }
-                                },
-                            maxLines = 5,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = {
-                                onEditMessage(msg.id, editText)
-                                editingMessage = null
-                            })
+                                .focusRequester(editFocusRequester),
+                            maxLines = 5
+                        )
                     }
                 },
                 confirmButton = {
@@ -1051,25 +1034,22 @@ fun ChatMessageBubble(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.padding(bottom = 4.dp, start = 4.dp, end = 4.dp)
             ) {
-                // Avatar pengirim — foto profil bila ada, else lingkaran inisial
-                // (audit #2). Ditandai dekoratif untuk TalkBack: nama sudah tertera.
-                val context = LocalContext.current
-                val bubblePhotoPath = remember(message.sender) {
-                    com.startupmini.nyachat.data.local.AvatarStore.getAvatarPath(context, message.sender)
-                }
+                // Avatar inisial pengirim — dekoratif (nama pengirim sudah ada di
+                // sampingnya); disembunyikan dari pembaca layar supaya TalkBack tidak
+                // membacakan huruf tunggal yang membingungkan (P3-2).
                 Box(
                     modifier = Modifier
                         .size(24.dp)
                         .clip(CircleShape)
-                        .clearAndSetSemantics { }
+                        .background(senderColor.copy(alpha = 0.16f))
+                        .clearAndSetSemantics {},
+                    contentAlignment = Alignment.Center
                 ) {
-                    com.startupmini.nyachat.ui.util.AvatarImage(
-                        name = senderLabel,
-                        size = 24,
-                        photoPath = bubblePhotoPath,
-                        backgroundColor = senderColor.copy(alpha = 0.16f),
-                        textColor = senderColor,
-                        textStyle = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    Text(
+                        text = senderLabel.take(1).uppercase(Locale.ROOT),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = senderColor
                     )
                 }
                 Spacer(modifier = Modifier.width(6.dp))
