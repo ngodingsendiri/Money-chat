@@ -107,8 +107,9 @@
 | FASE 2 — P1 HIGH PRIORITY | ✅ COMPLETE | 11/11 (TASK-2.1) + 3/3 (TASK-2.2) + 3/3 (TASK-2.3) |
 | FASE 3 — P2 MEDIUM PRIORITY | ✅ COMPLETE | 6/6 sub-tasks (M2/M8/M10/M12/L3/L4) |
 | FASE 4 — Audit Sisa | ✅ COMPLETE | 10/10 sub-tasks (M4/M5/M6/M7/M9/M11/L2/L7/L8/L12) |
+| FASE 5 — Audit Belum Dikerjakan | 🔄 PENDING | 0/8 sub-tasks (T2/T3/M1/L1/L5/L6/L9/L11) |
 
-**Total Progress:** 41/41 sub-tasks (100%)
+**Total Progress:** 41/49 sub-tasks (84%)
 
 ---
 
@@ -134,7 +135,26 @@
 - `./gradlew :app:lintDebug` → PASS (114 pre-existing warnings, 0 baru dari perubahan ini).
 - `./gradlew :app:assembleDebug` → SUCCESS → `app-debug.apk`.
 - `adb install -r` → SUCCESS; emulator: sync aktif, badge provenance tampil, workspace-switch tidak menghapus lampiran workspace lain.
-- Commit: (pending) — FASE 4 audit complete.
+- Commit: `ad2da2a` — `fix: FASE 4 audit sisa M4/M5/M6/M7/M9/M11/L2/L7/L8/L12 + Room migrasi v11`
+
+---
+
+## FASE 5 — Audit Sisa Belum Dikerjakan (T2/T3/M1/L1/L5/L6/L9/L11)
+
+**Status:** 🔄 PENDING — belum dimulai
+
+| Sub-Task | Status | Keterangan |
+|----------|--------|------------|
+| **T2** — README/App Check untuk `debug.keystore` publik | ⏳ PENDING | Dokumentasikan risiko `debug.keystore` di repo + cara mitigasi via Play App Signing / App Check di `README.md`. |
+| **T3** — Refactor `MainActivity`/`ChatScreen`/`RekapScreen` | ⏳ PENDING | Pecah file besar (MainActivity ~1.4k baris) jadi sub-composable/modular; ekstrak state/UI logic ke ViewModel/composable terpisah. |
+| **M1** — Upgrade dependensi | ⏳ PENDING | Naikkan AGP/Gradle/Kotlin/Room/Firebase/Compose ke versi stabil terbaru; cek breaking changes. |
+| **L1** — Perlindungan `MIGRATION_7_8` (backup sebelum delete) | ⏳ PENDING | Saat migrasi v7→v8 hapus duplikat `financial_transactions`, backup dulu baris yang akan dihapus ke tabel staging / export JSON. |
+| **L5** — `encodeBase64` stream (dokumentasi batas) | ⏳ PENDING | `ImageFileUtil.encodeBase64` baca full file ke memori; tambah kdoc batas ukuran aman (mis. ≤ 5 MB) & saran streaming untuk file besar. |
+| **L6** — Quick suggestion off saat tanpa AI key | ⏳ PENDING | `generateFrequentTransactionSuggestions` return fallback statis tanpa key AI; nonaktifkan tombol "Saran Cepat" di UI kalau `!GeminiService.isAvailable()`. |
+| **L9** — Dokumen enkripsi backup | ⏳ PENDING | Tambah `docs/backup-encryption.md` jelaskan format amplop (AES-256-GCM + PBKDF2 100k), passphrase flow, cross-workspace restore. |
+| **L11** — CI version via gradle property eksplisit | ⏳ PENDING | `build.gradle.kts` set `versionName`/`versionCode` dari `gradle.properties` (bukan hardcode), supaya CI bisa override tanpa edit file. |
+
+**Estimasi:** ~1-2 hari kerja penuh.
 
 ---
 
