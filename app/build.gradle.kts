@@ -80,6 +80,14 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  // M12: migration test Room membaca skema historis dari app/schemas. Skema
+  // ditambahkan ke aset debug (bukan test sourceSet) karena MigrationTestHelper
+  // di Robolectric membaca lewat context instrumentation/app — aset unit test
+  // SDK tidak di-merge oleh AGP. Debug assets mudah-mudahan tidak berdampak ke
+  // APK release (R8/shrink menghapusnya di buildType release).
+  sourceSets {
+    getByName("debug").assets.srcDirs("$projectDir/schemas")
+  }
 }
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
@@ -130,6 +138,7 @@ dependencies {
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
+  testImplementation(libs.androidx.room.testing)
   testImplementation(libs.org.json)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)

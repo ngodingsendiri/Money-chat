@@ -9,7 +9,14 @@ import androidx.room.PrimaryKey
 // performa query Rekap (ORDER BY timestamp DESC).
 @Entity(
     tableName = "financial_transactions",
-    indices = [Index(value = ["timestamp"]), Index(value = ["cloudId"], unique = true)]
+    indices = [
+        Index(value = ["timestamp"]),
+        Index(value = ["cloudId"], unique = true),
+        // Konsisten dengan MIGRATION_8_9 yang membuat index ini saat upgrade:
+        // DB fresh (onCreate) & DB hasil migrasi harus punya index yang sama,
+        // kalau tidak Room gagal verifikasi schema (M12 migration test).
+        Index(value = ["sourceMessageCloudId"])
+    ]
 )
 data class FinancialTransaction(
     @PrimaryKey(autoGenerate = true)

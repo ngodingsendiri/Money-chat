@@ -26,6 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **TASK-2.1**: Unit test `sourceMessageCloudId` round-trip & merge lintas perangkat (+4).
 
+### Fixed (FASE 3 — P2, audit M2/M8/M10/M12/L3/L4)
+- **M2**: Listener keanggotaan workspace kini dijeda saat app di background & dipasang ulang saat resume (`MembershipManager.pauseListeners()/resumeListeners()`, sinkron dengan `LifecycleResumeEffect` di `MainActivity`) — hemat kuota/baterai & mencegah komposisi ulang daftar anggota di background.
+- **M8**: Lookup transaksi saat tap badge finansial kini O(1) via map indeks `txBySourceCloudId`/`txByChatMessageId` (di-rebuild hanya saat daftar transaksi berubah) — bukan scan linear per komposisi.
+- **M10**: Log error parsing AI kini memakai label yang benar per penyedia — cabang Gemini memberi label "Gemini/parsing gagal…", OpenRouter tetap "OpenRouter/…" (sebelumnya semua cabang berlabel OpenRouter, menyulitkan diagnosa).
+- **M12**: Tambah migration test Room (`AppDatabaseMigrationTest`) yang memvalidasi skema historis v8→v10 (kolom & index `sourceMessageCloudId`, data lama terjaga) dan jalur v9→v10.
+- **L3**: `FinanceRepository.sendMessage` kini memakai satu timestamp `now` untuk pesan & transaksi — konsisten, bukan dua panggilan `System.currentTimeMillis()`.
+- **L4**: Dialog tambah/edit transaksi kini default `loggedBy` netral = "Anggota" (bukan "Bendahara") — sesuai sumber konflik merge.
+
+### Changed (FASE 3)
+- **M12**: DB Room naik **v9→v10** + `MIGRATION_9_10` (idempotent, `CREATE INDEX IF NOT EXISTS`) menambahkan index `financial_transactions(sourceMessageCloudId)` — menyamakan DB fresh (onCreate) dengan DB hasil migrasi v8→v9 yang sebelumnya inkonsisten; skema `9.json` direstorasi ke kondisi historis asli tanpa index.
+
 ---
 
 ## [r1.0.3] - 2026-08-06

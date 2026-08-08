@@ -88,7 +88,7 @@ object GeminiService {
                         return@withTimeoutOrNull parsed
                     }
                 } catch (e: Exception) {
-                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                    Log.w("GeminiService", "Gemini/parsing gagal, lanjut jalur berikutnya", e)
                 }
             }
             null
@@ -165,7 +165,7 @@ object GeminiService {
                         if (suggestions.isNotEmpty()) return@withTimeoutOrNull suggestions
                     }
                 } catch (e: Exception) {
-                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                    Log.w("GeminiService", "Gemini/parsing gagal, lanjut jalur berikutnya", e)
                 }
             }
             null
@@ -248,7 +248,7 @@ object GeminiService {
                         return@withTimeoutOrNull text
                     }
                 } catch (e: Exception) {
-                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                    Log.w("GeminiService", "Gemini/parsing gagal, lanjut jalur berikutnya", e)
                 }
             }
             null
@@ -352,7 +352,7 @@ object GeminiService {
                     val text = extractTextFromGeminiResponse(jsonResponse)
                     if (!text.isNullOrBlank()) return@withTimeoutOrNull text
                 } catch (e: Exception) {
-                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                    Log.w("GeminiService", "Gemini/parsing gagal, lanjut jalur berikutnya", e)
                 }
             }
             null
@@ -427,7 +427,7 @@ object GeminiService {
                     val text = extractTextFromGeminiResponse(jsonResponse)
                     if (!text.isNullOrBlank()) return@withTimeoutOrNull text
                 } catch (e: Exception) {
-                    Log.w("GeminiService", "OpenRouter/parsing gagal, lanjut jalur berikutnya", e)
+                    Log.w("GeminiService", "Gemini/parsing gagal, lanjut jalur berikutnya", e)
                 }
             }
             null

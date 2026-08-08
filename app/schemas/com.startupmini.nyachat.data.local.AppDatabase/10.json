@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 8,
-    "identityHash": "1bed32ab901aa73373d3d8881e1aa191",
+    "version": 10,
+    "identityHash": "c352f99991d5ebc7c2ffa1312c5f8cfa",
     "entities": [
       {
         "tableName": "chat_messages",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sender` TEXT NOT NULL, `messageText` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `isFinancial` INTEGER NOT NULL, `detectedAmount` REAL, `detectedCategory` TEXT, `detectedType` TEXT, `imagePath` TEXT, `filePath` TEXT, `fileName` TEXT, `replyToSender` TEXT, `replyToText` TEXT, `editedAt` INTEGER, `cloudId` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sender` TEXT NOT NULL, `messageText` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `isFinancial` INTEGER NOT NULL, `detectedAmount` REAL, `detectedCategory` TEXT, `detectedType` TEXT, `imagePath` TEXT, `filePath` TEXT, `fileName` TEXT, `replyToSender` TEXT, `replyToText` TEXT, `editedAt` INTEGER, `cloudId` TEXT, `sourceMessageCloudId` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -87,6 +87,11 @@
             "fieldPath": "cloudId",
             "columnName": "cloudId",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceMessageCloudId",
+            "columnName": "sourceMessageCloudId",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -118,7 +123,7 @@
       },
       {
         "tableName": "financial_transactions",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `category` TEXT NOT NULL, `amount` REAL NOT NULL, `description` TEXT NOT NULL, `loggedBy` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `editedAt` INTEGER, `chatMessageId` INTEGER, `cloudId` TEXT)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `type` TEXT NOT NULL, `category` TEXT NOT NULL, `amount` REAL NOT NULL, `description` TEXT NOT NULL, `loggedBy` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `editedAt` INTEGER, `chatMessageId` INTEGER, `cloudId` TEXT, `sourceMessageCloudId` TEXT)",
         "fields": [
           {
             "fieldPath": "id",
@@ -176,6 +181,11 @@
             "fieldPath": "cloudId",
             "columnName": "cloudId",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sourceMessageCloudId",
+            "columnName": "sourceMessageCloudId",
+            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -202,6 +212,15 @@
             ],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_financial_transactions_cloudId` ON `${TABLE_NAME}` (`cloudId`)"
+          },
+          {
+            "name": "index_financial_transactions_sourceMessageCloudId",
+            "unique": false,
+            "columnNames": [
+              "sourceMessageCloudId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_financial_transactions_sourceMessageCloudId` ON `${TABLE_NAME}` (`sourceMessageCloudId`)"
           }
         ]
       },
@@ -244,7 +263,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1bed32ab901aa73373d3d8881e1aa191')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c352f99991d5ebc7c2ffa1312c5f8cfa')"
     ]
   }
 }

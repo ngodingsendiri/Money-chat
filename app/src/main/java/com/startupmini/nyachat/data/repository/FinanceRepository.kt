@@ -71,12 +71,15 @@ class FinanceRepository(
         replyToText: String? = null
     ): FinancialTransaction? {
         return withContext(Dispatchers.IO) {
+            // Satu sumber waktu untuk pesan & transaksi (L3) — chat dan Rekap
+            // memakai timestamp yang sama supaya urutan tidak melompat-lompat.
+            val now = System.currentTimeMillis()
             // 1. Insert user chat message (cloudId unik lintas perangkat; imagePath = foto
             //    nota lokal; filePath/fileName = dokumen; replyTo* = pesan yang dibalas)
             val initialMsg = ChatMessage(
                 sender = sender,
                 messageText = messageText,
-                timestamp = System.currentTimeMillis(),
+                timestamp = now,
                 imagePath = imagePath,
                 filePath = filePath,
                 fileName = fileName,
@@ -103,7 +106,7 @@ class FinanceRepository(
                     amount = aiResult.amount,
                     description = aiResult.description ?: messageText,
                     loggedBy = sender,
-                    timestamp = System.currentTimeMillis(),
+                    timestamp = now,
                     chatMessageId = msgId,
                     cloudId = UUID.randomUUID().toString(),
                     sourceMessageCloudId = finalMsg.cloudId // Cross-device lookup key

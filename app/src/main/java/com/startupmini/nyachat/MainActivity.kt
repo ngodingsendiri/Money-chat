@@ -175,6 +175,16 @@ class MainActivity : ComponentActivity() {
                 val quickSuggestions by viewModel.quickSuggestions.collectAsStateWithLifecycle()
                 val syncStatus by com.startupmini.nyachat.data.remote.FirestoreSyncManager.syncStatus.collectAsStateWithLifecycle()
 
+                // M8: indeks transaksi per pesan (Map) supaya tap badge finansial tidak
+                // melakukan scan linear O(n) per komposisi — dibangun ulang hanya saat
+                // daftar transaksi berubah.
+                val txBySourceCloudId = remember(transactions) {
+                    transactions.mapNotNull { it.sourceMessageCloudId?.let { c -> c to it } }.toMap()
+                }
+                val txByChatMessageId = remember(transactions) {
+                    transactions.mapNotNull { it.chatMessageId?.let { id -> id to it } }.toMap()
+                }
+
                 var selectedTab by rememberSaveable { mutableIntStateOf(0) }
                 var showAddDialog by remember { mutableStateOf(false) }
                 var showSettingsSheet by remember { mutableStateOf(false) }
@@ -368,8 +378,10 @@ class MainActivity : ComponentActivity() {
             // atau composable dibuang.
             LifecycleResumeEffect(Unit) {
                 com.startupmini.nyachat.data.remote.FirestoreSyncManager.resumeListeners()
+                com.startupmini.nyachat.data.remote.MembershipManager.resumeListeners()
                 onPauseOrDispose {
                     com.startupmini.nyachat.data.remote.FirestoreSyncManager.pauseListeners()
+                    com.startupmini.nyachat.data.remote.MembershipManager.pauseListeners()
                 }
             }
 
@@ -619,14 +631,15 @@ class MainActivity : ComponentActivity() {
                                             onAskAiClicked = { viewModel.askAiInChat(it) },
                                             onDeleteMessage = { viewModel.deleteChatMessage(it) },
                                             onOpenTransaction = { msg ->
-                                                // Tap badge finansial (item 5): cari transaksi terkait lalu
+                                                // tap badge finansial (item 5): cari transaksi terkait lalu
                                                 // buka dialog edit. Cross-device: di perangkat lain, id lokal
                                                 // Room berbeda sehingga fallback chatMessageId gagal. Transaksi
                                                 // menyimpan sourceMessageCloudId = cloudId pesan asal → cari
                                                 // transaksi dengan sourceMessageCloudId == cloudId pesan kamu.
+                                                // M8: lookup via Map indeks O(1), bukan scan linear.
                                                 val tx = msg.cloudId?.let { msgCloudId ->
-                                                    transactions.find { it.sourceMessageCloudId == msgCloudId }
-                                                } ?: transactions.find { it.chatMessageId == msg.id }
+                                                    txBySourceCloudId[msgCloudId]
+                                                } ?: txByChatMessageId[msg.id]
                                                 if (tx != null) {
                                                     editTarget = tx
                                                     showAddDialog = true

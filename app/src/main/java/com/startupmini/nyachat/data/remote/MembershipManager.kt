@@ -100,6 +100,13 @@ object MembershipManager {
     @Volatile private var membersListener: ListenerRegistration? = null
     @Volatile private var joinRequestsListener: ListenerRegistration? = null
 
+    /** PIN & peran workspace aktif (untuk pasang-ulang listener saat resume). */
+    @Volatile private var currentPin: String = ""
+    @Volatile private var activeRole: String = ROLE_MEMBER
+
+    /** true saat app background & listener keanggotaan untuk sementara diputus (M2). */
+    @Volatile private var paused = false
+
     /** UID pengguna yang login sekarang. */
     fun currentUid(): String? = FirebaseAuth.getInstance().currentUser?.uid
 
@@ -112,6 +119,13 @@ object MembershipManager {
      */
     fun start(pin: String, role: String) {
         stop()
+        currentPin = pin
+        activeRole = role
+        attachListeners(pin, role)
+    }
+
+    /** Pasang listener keanggotaan (dipisah agar bisa dipasang ulang di resume, M2). */
+    private fun attachListeners(pin: String, role: String) {
         val famRef = db().collection(Constants.Collections.FAMILIES).document(pin)
         membersListener = famRef.collection(Constants.Collections.MEMBERS).addSnapshotListener { snap, err ->
             if (err != null) {
@@ -152,8 +166,32 @@ object MembershipManager {
         }
     }
 
-/** Hentikan listener & reset state (dipanggil juga dari FirestoreSyncManager.stop). */
+    /**
+     * Jeda listener keanggotaan saat app background (M2). Listener realtime
+     * diputus supaya tidak boros kuota/baterai & tidak memicu komposisi ulang
+     * daftar anggota di background. Daftar terakhir tetap dipertahankan — list
+     * tidak di-reset; saat resume, listener dipasang ulang & snapshot baru datang.
+     */
+    fun pauseListeners() {
+        if (paused) return
+        paused = true
+        membersListener?.remove(); membersListener = null
+        joinRequestsListener?.remove(); joinRequestsListener = null
+    }
+
+    /** Pasang ulang listener saat app kembali ke foreground. */
+    fun resumeListeners() {
+        if (!paused) return
+        paused = false
+        if (currentPin.isEmpty()) return
+        attachListeners(currentPin, activeRole)
+    }
+
+    /** Hentikan listener & reset state (dipanggil juga dari FirestoreSyncManager.stop). */
     fun stop() {
+        paused = false
+        currentPin = ""
+        activeRole = ROLE_MEMBER
         membersListener?.remove(); membersListener = null
         joinRequestsListener?.remove(); joinRequestsListener = null
         // Jangan biarkan daftar workspace lama menempel (P4-1): login ke workspace
