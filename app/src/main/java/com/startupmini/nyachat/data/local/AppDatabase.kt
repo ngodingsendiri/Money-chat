@@ -82,8 +82,29 @@ abstract class AppDatabase : RoomDatabase() {
         // chat_messages). Duplikat yang terlanjur ada dibuang dulu — dijaga baris
         // dengan id lokal terbesar per cloudId — supaya CREATE UNIQUE INDEX tidak
         // gagal di perangkat yang sudah punya data duplikat.
+        //
+        // L1: baris duplikat yang DIHAPUS di-backup dulu ke tabel staging
+        // (financial_transactions_duplicates_backup) sebelum di-delete — migrasi
+        // ini destruktif & permanen; backup memberi jalur pemulihan manual bila
+        // ternyata ada data yang masih dibutuhkan. Tabel staging dibuat satu kali
+        // (IF NOT EXISTS) dan tidak dihapus.
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS financial_transactions_duplicates_backup (" +
+                        "id INTEGER, type TEXT, category TEXT, amount REAL, description TEXT, " +
+                        "loggedBy TEXT, timestamp INTEGER, chatMessageId INTEGER, cloudId TEXT, " +
+                        "editedAt INTEGER, " +
+                        "backedUpAt INTEGER NOT NULL DEFAULT 0)"
+                )
+                db.execSQL(
+                    "INSERT INTO financial_transactions_duplicates_backup " +
+                        "(id, type, category, amount, description, loggedBy, timestamp, chatMessageId, cloudId, editedAt, backedUpAt) " +
+                        "SELECT id, type, category, amount, description, loggedBy, timestamp, chatMessageId, cloudId, editedAt, " +
+                        "(strftime('%s','now') * 1000) FROM financial_transactions " +
+                        "WHERE cloudId IS NOT NULL AND id NOT IN (" +
+                        "SELECT MAX(id) FROM financial_transactions WHERE cloudId IS NOT NULL GROUP BY cloudId)"
+                )
                 db.execSQL(
                     "DELETE FROM financial_transactions WHERE cloudId IS NOT NULL AND id NOT IN (" +
                         "SELECT MAX(id) FROM financial_transactions WHERE cloudId IS NOT NULL GROUP BY cloudId)"

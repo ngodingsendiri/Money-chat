@@ -1,7 +1,7 @@
 # 💬 Nyachat — Pencatatan Keuangan via Chat + AI
 
 [![Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml/badge.svg)](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml)
-![Versi](https://img.shields.io/badge/versi-r1.1.0-brightgreen)
+![Versi](https://img.shields.io/badge/versi-r1.1.2-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Android%207.0%2B-blue)
 
 **Nyachat** adalah aplikasi Android pencatat keuangan keluarga/kelompok yang berbasis **percakapan chat** (seperti WhatsApp) — cukup ketik pesan biasa seperti *"beli kopi 20rb"* atau *"gaji masuk 5 juta"*, dan AI otomatis mencatatnya sebagai transaksi. Dilengkapi rekap visual, analisis AI finansial, dan mode gelap.
@@ -14,7 +14,7 @@
 
 | Versi | File | Link |
 |---|---|---|
-| **r1.0.3** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/nyachat/releases/latest)** |
+| **r1.1.2** (terbaru) | `app-debug.apk` (debug) / `app-release.apk` (release) / `app-release.aab` (Play) | **⬇️ [Download dari GitHub Releases](https://github.com/ngodingsendiri/nyachat/releases/latest)** |
 | Semua versi | — | [Daftar Release](https://github.com/ngodingsendiri/nyachat/releases) |
 | Build mentah (artifact) | `Nyachat-r1.0.3-debug` (zip) | [Actions → Build APK](https://github.com/ngodingsendiri/nyachat/actions/workflows/build-apk.yml) |
 
@@ -86,12 +86,23 @@ Login Google gagal ("gagal login" / "Google Sign-In belum dikonfigurasi") hampir
 
 > 🔑 **Kenapa SHA-1 debug stabil sejak v1.2.4?** Sebelumnya GitHub Actions membuat `debug.keystore` **acak baru setiap build**, jadi SHA-1 berubah terus dan Google Sign-In selalu ditolak. Sekarang `debug.keystore` di-commit ke repo — SHA-1 selalu sama, cukup didaftarkan **sekali** di Firebase Console dan semua build berikutnya (debug & CI) langsung bisa login.
 
-> ⚠️ **Risiko `debug.keystore` publik (P1)**: karena keystore ini ada di repo publik,
-> siapa pun bisa menandatangani APK debug dengan SHA-1 yang sama → Google Sign-In
-> Firebase memperlakukan APK tersebut sebagai app "resmi". Risiko ini hanya menyentuh
-> **pengguna yang memasang APK debug dari sumber tidak tepercaya**. Mitigasi yang
-> disarankan: aktifkan **Firebase App Check** (menolak instal yang tidak terverifikasi)
-> dan ingatkan pengguna hanya mengunduh dari GitHub Releases resmi.
+> ⚠️ **Risiko `debug.keystore` publik (T2/P1)**: karena keystore ini ada di repo
+> publik, siapa pun bisa menandatangani APK debug dengan SHA-1 yang sama → Google
+> Sign-In Firebase memperlakukan APK tersebut sebagai app "resmi". Risiko ini hanya
+> menyentuh **pengguna yang memasang APK debug dari sumber tidak tepercaya**.
+>
+> **Mitigasi berlapis yang disarankan:**
+> 1. **Firebase App Check** — menolak request Firestore dari instal yang tidak
+>    terverifikasi (Play Integrity / App Attest), sehingga APK debug palsu tidak
+>    bisa membaca/menulis data workspace.
+> 2. **Play App Signing** — saat rilis ke Play Store, Google menyimpan kunci
+>    upload terpisah dan mengelola kunci penandatanganan aplikasi; versi Play
+>    **tidak** menggunakan `debug.keystore`, jadi SHA-1 produksi berbeda dari debug.
+> 3. **Edukasi pengguna** — hanya mengunduh dari **GitHub Releases resmi** atau
+>    Play Store; jangan pasang APK debug dari sumber tak dikenal.
+>
+> Trade-off yang diterima: `debug.keystore` di-commit supaya SHA-1 debug STABEL
+> (Google Sign-In tidak ditolak) di semua build lokal & CI.
 
 > 💡 **Sejak v1.2.5, app menampilkan SHA-1 miliknya sendiri di layar error login** — kalau login ditolak Google, pesan errornya langsung menyertakan angka `SHA-1 APK ini: ...` yang siap disalin ke Firebase Console. Jadi tidak perlu cari-cari lagi di mana SHA-1-nya.
 
@@ -209,4 +220,4 @@ Proyek ini dilisensikan di bawah [MIT License](LICENSE) *(jika ada)* — silakan
 
 ---
 
-Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.1.0**
+Dibuat dengan ❤️ oleh [@ngodingsendiri](https://github.com/ngodingsendiri) — **Nyachat r1.1.2**

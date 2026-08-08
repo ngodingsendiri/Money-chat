@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [r1.1.2] - 2026-08-08
+
+### Fixed
+- **CI rilis**: build tag r1.1.0/r1.1.1 gagal di step *Snapshot UI (Roborazzi
+  verify)* karena golden PNG di-rekam di Windows (font OS-specific) sedangkan
+  CI jalan di ubuntu → render berbeda walau kode tidak berubah. Golden file
+  diregenerasi di CI runner (ubuntu + Temurin JDK 21) lewat workflow
+  sementara, lalu di-commit — pola sama seperti komit `c3a01a6` sebelumnya.
+
+### Changed
+- **L11**: versi & versionCode dipindah ke `gradle.properties`
+  (`appVersion` / `appVersionCode`) — satu sumber kebenaran; CI & lokal bisa
+  override via `-PappVersion=... -PappVersionCode=...` tanpa edit file. Step
+  "Read version" di CI membaca `gradle.properties` (bukan grep regex rapuh).
+- Bump versi ke **r1.1.2** (versionCode **25**).
+
+### Added (FASE 5 - audit)
+- **L1**: `MIGRATION_7_8` (yang menghapus duplikat cloudId secara permanen)
+  kini mem-backup baris yang dihapus ke tabel staging
+  `financial_transactions_duplicates_backup` (idempotent, `IF NOT EXISTS`).
+- **L5**: kdoc `ImageFileUtil.encodeBase64` menyebut batas aman ≤ 5 MB & saran
+  streaming untuk file besar.
+- **L6**: `GeminiService.isAiAvailable()`; `generateFrequentTransactionSuggestions`
+  langsung mengembalikan fallback statis tanpa mencoba AI saat tidak ada key
+  (hemat waktu/kuota BYOK).
+- **L9**: dokumen `docs/backup-encryption.md` — format amplop AES-256-GCM +
+  PBKDF2 600k, alur passphrase manual & auto, restore lintas workspace.
+- **T2**: README bagian risiko `debug.keystore` diperluas — mitigasi Firebase
+  App Check, Play App Signing, & edukasi download resmi.
+
 ## [Unreleased] - Fix v1.1.0
 
 ### Fixed

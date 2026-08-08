@@ -139,20 +139,22 @@
 
 ---
 
-## FASE 5 — Audit Sisa Belum Dikerjakan (T2/T3/M1/L1/L5/L6/L9/L11)
+## FASE 5 — Audit Sisa (T2/T3/M1/L1/L5/L6/L9/L11)
 
-**Status:** 🔄 PENDING — belum dimulai
+**Status:** 🟡 SEBAGIAN — item aman selesai; T3 & M1 ditunda ke rilis berikutnya
 
 | Sub-Task | Status | Keterangan |
 |----------|--------|------------|
-| **T2** — README/App Check untuk `debug.keystore` publik | ⏳ PENDING | Dokumentasikan risiko `debug.keystore` di repo + cara mitigasi via Play App Signing / App Check di `README.md`. |
-| **T3** — Refactor `MainActivity`/`ChatScreen`/`RekapScreen` | ⏳ PENDING | Pecah file besar (MainActivity ~1.4k baris) jadi sub-composable/modular; ekstrak state/UI logic ke ViewModel/composable terpisah. |
-| **M1** — Upgrade dependensi | ⏳ PENDING | Naikkan AGP/Gradle/Kotlin/Room/Firebase/Compose ke versi stabil terbaru; cek breaking changes. |
-| **L1** — Perlindungan `MIGRATION_7_8` (backup sebelum delete) | ⏳ PENDING | Saat migrasi v7→v8 hapus duplikat `financial_transactions`, backup dulu baris yang akan dihapus ke tabel staging / export JSON. |
-| **L5** — `encodeBase64` stream (dokumentasi batas) | ⏳ PENDING | `ImageFileUtil.encodeBase64` baca full file ke memori; tambah kdoc batas ukuran aman (mis. ≤ 5 MB) & saran streaming untuk file besar. |
-| **L6** — Quick suggestion off saat tanpa AI key | ⏳ PENDING | `generateFrequentTransactionSuggestions` return fallback statis tanpa key AI; nonaktifkan tombol "Saran Cepat" di UI kalau `!GeminiService.isAvailable()`. |
-| **L9** — Dokumen enkripsi backup | ⏳ PENDING | Tambah `docs/backup-encryption.md` jelaskan format amplop (AES-256-GCM + PBKDF2 100k), passphrase flow, cross-workspace restore. |
-| **L11** — CI version via gradle property eksplisit | ⏳ PENDING | `build.gradle.kts` set `versionName`/`versionCode` dari `gradle.properties` (bukan hardcode), supaya CI bisa override tanpa edit file. |
+| **T2** — README/App Check untuk `debug.keystore` publik | ✅ DONE | Bagian risiko diperluas: mitigasi berlapis Firebase App Check + Play App Signing + edukasi download resmi (`README.md`). |
+| **T3** — Refactor `MainActivity`/`ChatScreen`/`RekapScreen` | ⏳ DEFERRED | Ditunda ke rilis berikutnya (berisiko tinggi menjelang rilis r1.1.2). |
+| **M1** — Upgrade dependensi | ⏳ DEFERRED | Ditunda ke rilis berikutnya (berisiko tinggi menjelang rilis r1.1.2). |
+| **L1** — Perlindungan `MIGRATION_7_8` (backup sebelum delete) | ✅ DONE | Backup duplikat yang dihapus ke tabel staging `financial_transactions_duplicates_backup` (`CREATE TABLE IF NOT EXISTS` + INSERT SELECT sebelum DELETE, idempotent). |
+| **L5** — `encodeBase64` stream (dokumentasi batas) | ✅ DONE | kdoc batas aman ≤ 5 MB & saran streaming untuk file besar. |
+| **L6** — Quick suggestion off saat tanpa AI key | ✅ DONE | `GeminiService.isAiAvailable()` + `generateFrequentTransactionSuggestions` early-return `DEFAULT_SUGGESTIONS` tanpa jalur AI. |
+| **L9** — Dokumen enkripsi backup | ✅ DONE | `docs/backup-encryption.md` — amplop AES-256-GCM + PBKDF2 600k, alur passphrase manual/auto (M5), restore lintas workspace. |
+| **L11** — CI version via gradle property eksplisit | ✅ DONE | `appVersion`/`appVersionCode` di `gradle.properties` (satu sumber kebenaran), override via `-PappVersion`; step Read version CI baca `gradle.properties`. |
+
+**Catatan CI (r1.1.2):** build tag r1.1.0/r1.1.1 gagal di Roborazzi verify karena golden PNG direkam di Windows (font OS-specific) sedangkan CI di ubuntu. Goldens diregenerasi di CI runner (ubuntu + Temurin JDK 21) via workflow sementara `record-goldens.yml` (pola komit `c3a01a6`).
 
 **Estimasi:** ~1-2 hari kerja penuh.
 

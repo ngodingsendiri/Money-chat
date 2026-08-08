@@ -8,10 +8,11 @@ plugins {
   alias(libs.plugins.google.firebase.crashlytics)
 }
 
-// E1: versionName dari git tag (via CI property) atau default.
-// CI bisa set via -Papp.version=X.Y.Z. Local build fallback = r1.0.0.
+// L11: versi & versionCode dari gradle.properties (satu sumber kebenaran).
+// CI & lokal bisa override via -PappVersion=... -PappVersionCode=... tanpa edit file.
 // Skema rilis: tag r* (r1.0.0, r1.0.1, ...) — lihat GitHubUpdateChecker.
-private val appVersion: String = project.findProperty("appVersion") as String? ?: "r1.1.0"
+private val appVersion: String = project.findProperty("appVersion") as String? ?: "r1.1.2"
+private val appVersionCode: Int = (project.findProperty("appVersionCode") as String?)?.toIntOrNull() ?: 25
 
 android {
   namespace = "com.startupmini.nyachat"
@@ -21,7 +22,7 @@ android {
     applicationId = "com.startupmini.nyachat"
     minSdk = 24
     targetSdk = 36
-    versionCode = 24
+    versionCode = appVersionCode
     versionName = appVersion
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

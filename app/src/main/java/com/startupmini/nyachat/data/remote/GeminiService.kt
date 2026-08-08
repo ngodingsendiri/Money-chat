@@ -53,6 +53,10 @@ object GeminiService {
      *  beberapa menit (B6). Habis waktu → langsung fallback heuristik offline. */
     internal const val AI_CALL_TIMEOUT_MS = 60_000L
 
+    /** L6: saran cepat statis (fallback saat tanpa key AI / riwayat kosong). */
+    private val DEFAULT_SUGGESTIONS =
+        listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
+
     suspend fun parseChatMessage(
         messageText: String,
         sender: String,
@@ -103,10 +107,20 @@ object GeminiService {
     }
 
 
+    /** L6: true kalau setidaknya satu jalur AI tersedia (OpenRouter atau Gemini BYOK). */
+    fun isAiAvailable(): Boolean =
+        OpenRouterService.activeApiKey() != null ||
+            getApiKey().isNotBlank() && getApiKey() != "MY_GEMINI_API_KEY"
+
     suspend fun generateFrequentTransactionSuggestions(
         transactions: List<FinancialTransaction>
     ): List<String> = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
+        // L6: tanpa key AI, jangan buang waktu/timeout di jalur AI — langsung
+        // fallback statis. Mencegah cooldown & delay yang tak perlu di UI.
+        if (!isAiAvailable()) {
+            return@withContext DEFAULT_SUGGESTIONS
+        }
         if (transactions.isEmpty()) {
             return@withContext listOf("Makan siang 25.000", "Bensin 20.000", "Beli token listrik 50.000")
         }
@@ -175,9 +189,9 @@ object GeminiService {
         }
         if (aiSuggestions != null) return@withContext aiSuggestions
 
-        // 3) Fallback offline heuristic
+        // 3) Fallback offline heuristic (L6: fallback statis konsisten DEFAULT_SUGGESTIONS)
         val fallback = transactions.take(4).map { "${it.description} ${it.amount.toLong()}" }
-        return@withContext fallback.ifEmpty { listOf("Makan siang 25000", "Bensin 20000", "Beli token listrik 50000") }
+        return@withContext fallback.ifEmpty { DEFAULT_SUGGESTIONS }
     }
 
     suspend fun generateFinancialAuditReport(

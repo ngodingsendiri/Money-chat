@@ -105,7 +105,15 @@ object ImageFileUtil {
         }.getOrNull()
     }
 
-    /** Enkode file gambar jadi base64 (untuk API AI vision). */
+    /**
+     * Enkode file gambar jadi base64 (untuk API AI vision).
+     *
+     * L5: metode ini membaca SELURUH file ke memori (File.readBytes), jadi batas
+     * aman untuk foto nota yang sudah di-downscale adalah ≤ ~5 MB. Foto yang
+     * melewati [saveImageFromUri] selalu berukuran kecil (max 1600px, JPEG 85);
+     * dokumen PDF TIDAK dikirim ke AI. Untuk file besar di masa depan, ganti
+     * dengan streaming (encode per-chunk) agar tidak memakan memori tinggi.
+     */
     fun encodeBase64(imagePath: String): String? {
         return runCatching {
             val bytes = File(imagePath).readBytes()
